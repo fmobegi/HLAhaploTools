@@ -1,12 +1,13 @@
 #' Load HLA Typing Data from CSV or TSV Using readr
 #'
 #' Reads an HLA typing data file in CSV or TSV format and returns a tibble.
+#' By default, all columns are read as character.
 #'
 #' @param filepath Path to the data file (.csv or .tsv).
 #' @param ... Additional arguments passed to the readr reading functions.
 #'
 #' @return A tibble containing the HLA typing data.
-#' @importFrom readr read_csv read_tsv
+#' @importFrom readr read_csv read_tsv cols
 #' @export
 load_typing_data <- function(filepath, ...) {
   if (!file.exists(filepath)) {
@@ -18,7 +19,7 @@ load_typing_data <- function(filepath, ...) {
   # Helper to load file safely
   safe_read <- function(read_fun, path, ...) {
     tryCatch({
-      df <- read_fun(path, ...)
+      df <- read_fun(path, col_types = readr::cols(.default = "c"), ...)
       cat("Successfully loaded data with",
           nrow(df),
           "rows and",
