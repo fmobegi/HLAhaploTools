@@ -1,0 +1,10 @@
+Package: HLAhaploTools
+Title: Tools for Inference and Analysis of Extended HLA Haplotypes
+Version: 0.0.0.9000
+Authors@R: 
+    person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Description: Provides tools for working with extended human leukocyte antigen (HLA) haplotypes, including functions for haplotype construction, visualization, family-based inference, and population-level summaries. Supports both classical and non-classical HLA loci, as well as MICA and MICB genes. Facilitates multi-locus haplotype analysis for use in immunogenetics, transplantation matching, and genetic association studies.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
