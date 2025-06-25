@@ -11,11 +11,16 @@ RoxygenNote: 7.3.2
 biocViews: Genetics, Immunogenetics, Haplotypes, Annotation, DataImport, BiomedicalInformatics
 Imports:
     dplyr,
-    janitor,
     forcats,
+    ggplot2,
+    HLAtools,
+    immunotation,
+    janitor,
+    RColorBrewer,
     readr,
     readxl,
-    immunotation
+    tibble,
+    tidyr
 Suggests: 
     testthat (>= 3.0.0),
     knitr,
