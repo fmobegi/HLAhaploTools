@@ -1,10 +1,8 @@
-# ~~~~~~~~~~~~~~~~~~~ CALCULATE FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 #' Calculate HLA Allele Frequencies
 #'
 #' Computes allele frequencies for all HLA genes in a tidy dataset with `_1` and `_2` allele columns.
 #' If no population column exists, a default "FSH_Immuno" value is used.
-#' Handles missing data and malformed columns safely.
+#' Handles multi-allele strings (e.g., "A*01:01:01:01/A*01:01:01:02") by splitting before counting.
 #'
 #' @param hped A data frame or tibble with HLA allele columns.
 #'
@@ -13,8 +11,11 @@
 #' @importFrom tibble tibble as_tibble
 #' @export
 calculate_HLA_frequency <- function(hped) {
+  message("\t📊 Calculating HLA allele frequencies...")
+
   if (!"Population" %in% colnames(hped)) {
-    hped$Population <- "FSH_Immuno"
+    message("\tℹ️ No population column found — assigning default 'FSH_Immuno'.")
+    hped$Population <- "FSH"
   }
 
   allele_cols <- grep("_[12]$", names(hped), value = TRUE)
@@ -29,33 +30,36 @@ calculate_HLA_frequency <- function(hped) {
         alleles <- unlist(hped[gene_cols], use.names = FALSE)
         alleles <- alleles[!is.na(alleles)]
 
-        if (length(alleles) == 0) {
-          warning(sprintf("Gene '%s' has no allele data. Skipping.", gene))
+        # Split multi-allele strings (e.g. A*01:01/A*01:02) into separate observations
+        alleles_split <- unlist(strsplit(alleles, "/"))
+        alleles_split <- trimws(alleles_split)
+
+        if (length(alleles_split) == 0) {
+          message(sprintf("\t⚠️ Gene '%s' has no allele data — skipped.", gene))
           return(NULL)
         }
 
-        counts <- table(alleles)
+        counts <- table(alleles_split)
         tibble::tibble(
           gene = gene,
           allele = names(counts),
           count = as.integer(counts),
-          freq = as.integer(counts) / length(alleles)
+          freq = as.integer(counts) / length(alleles_split)
         )
       },
       error = function(e) {
-        warning(sprintf("Skipping gene '%s' due to error: %s", gene, e$message))
+        warning(sprintf("\t❌ Skipping gene '%s' due to error: %s", gene, e$message))
         NULL
       }
     )
   })
 
-  result <- do.call(rbind, Filter(Negate(is.null), df_list))
+  freq_result <- do.call(rbind, Filter(Negate(is.null), df_list))
+  message("\t✅ Allele frequency calculation complete.\n")
 
-  return(
-    result %>%
-      dplyr::arrange(gene, dplyr::desc(freq))
-  )
+  return(freq_result %>% dplyr::arrange(gene, dplyr::desc(freq)))
 }
+
 
 # ~~~~~~~~~~~~~~~~~~~ PLOT FUNCTIONS ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -186,43 +190,51 @@ Plot_HLA_allele_count <- function(hped) {
 #' @importFrom ggplot2 ggplot aes geom_bar geom_text scale_fill_manual theme_classic theme labs
 #' @importFrom RColorBrewer brewer.pal
 #' @export
-plot_HLA_Diversity <- function(hped, gene = "A", ntop = 2) {
-  if (!"FAMILY_ID" %in% names(hped) && !"Population" %in% names(hped)) {
-    hped$population <- "FSH_Immuno"
-  } else {
-    hped$population <- hped$FAMILY_ID %||% hped$Population
+plot_HLA_Diversity <- function(hped, gene = "A", ntop = 10) {
+  message("\t📊 Preparing HLA diversity plot for gene: ", gene)
+
+  # Ensure Population column is present
+  if (!"Population" %in% names(hped)) {
+    message("\tℹ️ No 'Population' column found — assigning all records to 'FSH_Immuno'")
+    hped$Population <- "FSH"
   }
 
-  allele_cols <- grep("(_1|_2)$", colnames(hped), value = TRUE)
+  # Reshape to long format
+  allele_cols <- grep("_[12]$", names(hped), value = TRUE)
   long_df <- hped %>%
     tidyr::pivot_longer(cols = all_of(allele_cols), names_to = "Column", values_to = "allele") %>%
     dplyr::mutate(HLA_gene = sub("_.*", "", Column)) %>%
-    dplyr::filter(!is.na(allele))
+    dplyr::filter(!is.na(allele)) %>%
+    # Split MAC multi-allele strings
+    tidyr::separate_rows(allele, sep = "/")
 
+  # Group and summarize frequencies
   allele_summary <- long_df %>%
-    dplyr::group_by(population, HLA_gene, allele) %>%
-    dplyr::summarise(count = n(), .groups = "drop") %>%
-    dplyr::group_by(population, HLA_gene) %>%
+    dplyr::group_by(Population, HLA_gene, allele) %>%
+    dplyr::summarise(count = dplyr::n(), .groups = "drop") %>%
+    dplyr::group_by(Population, HLA_gene) %>%
     dplyr::mutate(
       freq = count / sum(count),
       Label = dplyr::if_else(freq > 0.05, allele, "others")
     )
 
+  # Identify top alleles
   top_alleles <- allele_summary %>%
     dplyr::filter(HLA_gene == gene) %>%
-    dplyr::arrange(population, -freq) %>%
-    dplyr::group_by(population) %>%
+    dplyr::arrange(Population, dplyr::desc(freq)) %>%
+    dplyr::group_by(Population) %>%
     dplyr::slice_head(n = ntop) %>%
     dplyr::pull(allele) %>%
     unique()
 
+  # Prep for plotting
   plot_df <- allele_summary %>%
     dplyr::filter(HLA_gene == gene) %>%
     dplyr::mutate(Label = dplyr::if_else(allele %in% top_alleles, allele, "others")) %>%
-    dplyr::group_by(population, Label) %>%
+    dplyr::group_by(Population, Label) %>%
     dplyr::summarise(freq2 = sum(freq), .groups = "drop")
 
-  ggplot2::ggplot(plot_df, aes(x = population, y = freq2, fill = Label)) +
+  ggplot2::ggplot(plot_df, aes(x = Population, y = freq2, fill = Label)) +
     ggplot2::geom_bar(stat = "identity", position = "stack") +
     ggplot2::geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4.5) +
     ggplot2::theme_classic() +
@@ -237,3 +249,18 @@ plot_HLA_Diversity <- function(hped, gene = "A", ntop = 2) {
       legend.position = "none"
     )
 }
+
+## PAckages ----
+# usethis::use_package("janitor")
+# usethis::use_package("dplyr")
+# usethis::use_package("tidyr")
+# usethis::use_package("purrr")
+# usethis::use_package("tibble")
+# usethis::use_package("forcats")
+# usethis::use_package("readr")
+# usethis::use_package("readxl")
+# usethis::use_package("future")
+# usethis::use_package("furrr")
+# usethis::use_package("future.apply")
+# usethis::use_package("immunotation")
+# usethis::use_package("HLAtools")
