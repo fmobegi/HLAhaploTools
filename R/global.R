@@ -10,7 +10,7 @@
 #' @importFrom dplyr arrange desc
 #' @importFrom tibble tibble as_tibble
 #' @export
-calculate_HLA_frequency <- function(hped) {
+calculate_hla_frequency <- function(hped) {
   message("\t📊 Calculating HLA allele frequencies...")
 
   if (!"Population" %in% colnames(hped)) {
@@ -55,7 +55,7 @@ calculate_HLA_frequency <- function(hped) {
   })
 
   freq_result <- do.call(rbind, Filter(Negate(is.null), df_list))
-  message("\t✅ Allele frequency calculation complete.\n")
+  message("\t✅ Allele frequency calculation complete.")
 
   return(freq_result %>% dplyr::arrange(gene, dplyr::desc(freq)))
 }
@@ -66,7 +66,7 @@ calculate_HLA_frequency <- function(hped) {
 #' Plot HLA Allele Frequencies by Gene
 #'
 #' Visualizes allele frequencies across genes, grouping rare alleles into "others".
-#' Frequencies are computed using `calculate_HLA_frequency()`.
+#' Frequencies are computed using `calculate_hla_frequency()`.
 #'
 #' @param hped A data frame or tibble with HLA allele columns.
 #' @param minFreq Minimum frequency threshold (default = 0.05) above which allele labels are shown.
@@ -76,8 +76,8 @@ calculate_HLA_frequency <- function(hped) {
 #' @importFrom tibble as_tibble
 #' @importFrom RColorBrewer brewer.pal
 #' @export
-Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
-  freq_file <- tryCatch(calculate_HLA_frequency(hped), error = function(e) {
+plot_hla_allele_frequency <- function(hped, minFreq = 0.05) {
+  freq_file <- tryCatch(calculate_hla_frequency(hped), error = function(e) {
     stop("Failed to calculate frequencies: ", e$message)
   })
 
@@ -85,7 +85,10 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
     dplyr::mutate(Label = dplyr::if_else(freq > minFreq, allele, "others"))
 
   custom_colors <- c(
-    colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(unique(freq_plot_df$Label))),
+    colorRampPalette(
+      RColorBrewer::brewer.pal(8, "Set2")
+    )(
+      length(unique(freq_plot_df$Label))),
     "gray90"
   )
 
@@ -94,7 +97,11 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
     dplyr::summarise(freq_sum = sum(freq), .groups = "drop") %>%
     ggplot2::ggplot(aes(x = gene, y = freq_sum, fill = Label)) +
     ggplot2::geom_bar(stat = "identity") +
-    ggplot2::geom_text(aes(label = Label), position = position_stack(0.5), size = 2.5) +
+    ggplot2::geom_text(
+      aes(label = Label),
+      position = position_stack(0.5),
+      size = 2.5
+    ) +
     ggplot2::theme_classic() +
     ggplot2::xlab("HLA Genes") +
     ggplot2::ylab("Allele Frequency") +
@@ -103,7 +110,7 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
 } #' Plot HLA Allele Frequencies by Gene
 #'
 #' Visualizes allele frequencies across genes, grouping rare alleles into "others".
-#' Frequencies are computed using `calculate_HLA_frequency()`.
+#' Frequencies are computed using `calculate_hla_frequency()`.
 #'
 #' @param hped A data frame or tibble with HLA allele columns.
 #' @param minFreq Minimum frequency threshold (default = 0.05) above which allele labels are shown.
@@ -113,8 +120,8 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
 #' @importFrom tibble as_tibble
 #' @importFrom RColorBrewer brewer.pal
 #' @export
-Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
-  freq_file <- tryCatch(calculate_HLA_frequency(hped), error = function(e) {
+plot_hla_allele_frequency <- function(hped, minFreq = 0.05) {
+  freq_file <- tryCatch(calculate_hla_frequency(hped), error = function(e) {
     stop("Failed to calculate frequencies: ", e$message)
   })
 
@@ -122,7 +129,10 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
     dplyr::mutate(Label = dplyr::if_else(freq > minFreq, allele, "others"))
 
   custom_colors <- c(
-    colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(unique(freq_plot_df$Label))),
+    colorRampPalette(
+      RColorBrewer::brewer.pal(8, "Set2")
+    )
+    (length(unique(freq_plot_df$Label))),
     "gray90"
   )
 
@@ -131,7 +141,11 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
     dplyr::summarise(freq_sum = sum(freq), .groups = "drop") %>%
     ggplot2::ggplot(aes(x = gene, y = freq_sum, fill = Label)) +
     ggplot2::geom_bar(stat = "identity") +
-    ggplot2::geom_text(aes(label = Label), position = position_stack(0.5), size = 2.5) +
+    ggplot2::geom_text(
+      aes(label = Label),
+      position = position_stack(0.5),
+      size = 2.5
+    ) +
     ggplot2::theme_classic() +
     ggplot2::xlab("HLA Genes") +
     ggplot2::ylab("Allele Frequency") +
@@ -152,8 +166,8 @@ Plot_HLA_allele_frequency <- function(hped, minFreq = 0.05) {
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom dplyr group_by summarise
 #' @export
-Plot_HLA_allele_count <- function(hped) {
-  freq_file <- tryCatch(calculate_HLA_frequency(hped), error = function(e) {
+plot_hla_allele_count <- function(hped) {
+  freq_file <- tryCatch(calculate_hla_frequency(hped), error = function(e) {
     stop("Failed to calculate frequencies: ", e$message)
   })
 
@@ -166,7 +180,12 @@ Plot_HLA_allele_count <- function(hped) {
     ggplot2::theme_classic() +
     ggplot2::xlab("HLA Gene") +
     ggplot2::ylab("Unique Alleles Observed") +
-    ggplot2::scale_fill_manual(values = colorRampPalette(RColorBrewer::brewer.pal(8, "Dark2"))(nrow(count_df))) +
+    ggplot2::scale_fill_manual(
+      values = colorRampPalette(
+        RColorBrewer::brewer.pal(8, "Dark2")
+      )
+      (nrow(count_df))
+    ) +
     ggplot2::theme(
       legend.position = "none",
       axis.text = element_text(size = 14),
@@ -190,7 +209,7 @@ Plot_HLA_allele_count <- function(hped) {
 #' @importFrom ggplot2 ggplot aes geom_bar geom_text scale_fill_manual theme_classic theme labs
 #' @importFrom RColorBrewer brewer.pal
 #' @export
-plot_HLA_Diversity <- function(hped, gene = "A", ntop = 10) {
+plot_hla_Diversity <- function(hped, gene = "A", ntop = 10) {
   message("\t📊 Preparing HLA diversity plot for gene: ", gene)
 
   # Ensure Population column is present
@@ -202,7 +221,11 @@ plot_HLA_Diversity <- function(hped, gene = "A", ntop = 10) {
   # Reshape to long format
   allele_cols <- grep("_[12]$", names(hped), value = TRUE)
   long_df <- hped %>%
-    tidyr::pivot_longer(cols = all_of(allele_cols), names_to = "Column", values_to = "allele") %>%
+    tidyr::pivot_longer(
+      cols = all_of(allele_cols),
+      names_to = "Column",
+      values_to = "allele"
+    ) %>%
     dplyr::mutate(HLA_gene = sub("_.*", "", Column)) %>%
     dplyr::filter(!is.na(allele)) %>%
     # Split MAC multi-allele strings
@@ -230,17 +253,33 @@ plot_HLA_Diversity <- function(hped, gene = "A", ntop = 10) {
   # Prep for plotting
   plot_df <- allele_summary %>%
     dplyr::filter(HLA_gene == gene) %>%
-    dplyr::mutate(Label = dplyr::if_else(allele %in% top_alleles, allele, "others")) %>%
+    dplyr::mutate(
+      Label = dplyr::if_else(
+        allele %in% top_alleles,
+        allele,
+        "others"
+      )
+    ) %>%
     dplyr::group_by(Population, Label) %>%
     dplyr::summarise(freq2 = sum(freq), .groups = "drop")
 
-  ggplot2::ggplot(plot_df, aes(x = Population, y = freq2, fill = Label)) +
+  ggplot2::ggplot(
+    plot_df,
+    aes(x = Population, y = freq2, fill = Label)
+  ) +
     ggplot2::geom_bar(stat = "identity", position = "stack") +
-    ggplot2::geom_text(aes(label = Label), position = position_stack(vjust = 0.5), size = 4.5) +
+    ggplot2::geom_text(
+      aes(label = Label),
+      position = position_stack(vjust = 0.5),
+      size = 4.5
+    ) +
     ggplot2::theme_classic() +
     ggplot2::labs(x = "Population", y = "Allele Frequency") +
     ggplot2::scale_fill_manual(values = c(
-      colorRampPalette(RColorBrewer::brewer.pal(8, "Set2"))(length(unique(plot_df$Label))),
+      colorRampPalette(
+        RColorBrewer::brewer.pal(8, "Set2")
+      )
+      (length(unique(plot_df$Label))),
       "gray90"
     )) +
     ggplot2::theme(
@@ -249,18 +288,3 @@ plot_HLA_Diversity <- function(hped, gene = "A", ntop = 10) {
       legend.position = "none"
     )
 }
-
-## PAckages ----
-# usethis::use_package("janitor")
-# usethis::use_package("dplyr")
-# usethis::use_package("tidyr")
-# usethis::use_package("purrr")
-# usethis::use_package("tibble")
-# usethis::use_package("forcats")
-# usethis::use_package("readr")
-# usethis::use_package("readxl")
-# usethis::use_package("future")
-# usethis::use_package("furrr")
-# usethis::use_package("future.apply")
-# usethis::use_package("immunotation")
-# usethis::use_package("HLAtools")

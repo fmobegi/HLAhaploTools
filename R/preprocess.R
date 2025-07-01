@@ -1,6 +1,6 @@
-# ~~~~~~~~~~~~~~~~~~~~
-# load_typing_data()
-# ~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~
+# load_typing_data
+# ~~~~~~~~~~~~~~~~
 #' Load HLA Typing Data from CSV, TSV, or Excel
 #'
 #' Reads an HLA typing data file from CSV, TSV, or Excel format and returns a tibble.
@@ -36,10 +36,23 @@ load_typing_data <- function(filepath, sheet = NULL, ...) {
   }
 
   df <- switch(ext,
-    "csv"  = safe_read(readr::read_csv, file = filepath, col_types = readr::cols(.default = "c"), ...),
-    "tsv"  = safe_read(readr::read_tsv, file = filepath, col_types = readr::cols(.default = "c"), ...),
-    "txt"  = safe_read(readr::read_tsv, file = filepath, col_types = readr::cols(.default = "c"), ...),
-    "xlsx" = safe_read(readxl::read_excel, path = filepath, sheet = sheet, col_types = "text", ...),
+    "csv" = safe_read(readr::read_csv,
+      file = filepath,
+      col_types = readr::cols(.default = "c"), ...
+    ),
+    "tsv" = safe_read(readr::read_tsv,
+      file = filepath,
+      col_types = readr::cols(.default = "c"), ...
+    ),
+    "txt" = safe_read(readr::read_tsv,
+      file = filepath,
+      col_types = readr::cols(.default = "c"), ...
+    ),
+    "xlsx" = safe_read(readxl::read_excel,
+      path = filepath,
+      sheet = sheet,
+      col_types = "text", ...
+    ),
     stop("\t❌ Unsupported file extension: ", ext, ". Use .csv, .tsv, .txt, or .xlsx instead.")
   )
 
@@ -47,7 +60,7 @@ load_typing_data <- function(filepath, sheet = NULL, ...) {
 }
 
 # ~~~~~~~~~~~~~~~~~~~~
-# reformat_typing_data()
+# reformat_typing_data
 # ~~~~~~~~~~~~~~~~~~~~
 #' Reformat and Verbosely Validate Raw HLA Typing Data
 #'
@@ -72,18 +85,29 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
 
   class1 <- c("A_1", "A_2", "B_1", "B_2", "C_1", "C_2")
   class2 <- c(
-    "DRB1_1", "DRB1_2", "DRB3_1", "DRB3_2", "DRB4_1", "DRB4_2",
-    "DRB5_1", "DRB5_2", "DQA1_1", "DQA1_2", "DQB1_1", "DQB1_2",
-    "DPA1_1", "DPA1_2", "DPB1_1", "DPB1_2"
+    "DRB1_1", "DRB1_2", "DRB3_1",
+    "DRB3_2", "DRB4_1", "DRB4_2",
+    "DRB5_1", "DRB5_2", "DQA1_1",
+    "DQA1_2", "DQB1_1", "DQB1_2",
+    "DPA1_1", "DPA1_2", "DPB1_1",
+    "DPB1_2"
   )
-  nonclass <- c("F_1", "F_2", "G_1", "G_2", "H_1", "H_2", "J_1", "J_2", "E_1", "E_2")
+  nonclass <- c(
+    "F_1", "F_2", "G_1", "G_2", "H_1",
+    "H_2", "J_1", "J_2", "E_1", "E_2"
+  )
   mic <- c("MICA_1", "MICA_2", "MICB_1", "MICB_2")
 
   detect_group <- function(label, group) {
     present <- intersect(group, names(df))
     message(sprintf(
       if (length(present)) "\t✅ %s genes detected: %s" else "\t❌ No %s genes detected.",
-      label, paste(unique(sub("_.*", "", present)), collapse = ", ")
+      label, paste(
+        unique(
+          sub("_.*", "", present)
+        ),
+        collapse = ", "
+      )
     ))
     present
   }
@@ -101,7 +125,11 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
     gene <- sub("_.*", "", col)
     df[[col]] <- ifelse(is.na(df[[col]]) | grepl("^\\s*$", df[[col]]), NA_character_,
       ifelse(grepl("^\\*", df[[col]]), paste0(gene, df[[col]]),
-        ifelse(grepl("\\*", df[[col]]), df[[col]], paste0(gene, "*", df[[col]]))
+        ifelse(
+          grepl("\\*", df[[col]]),
+          df[[col]],
+          paste0(gene, "*", df[[col]])
+        )
       )
     )
   }
@@ -110,7 +138,10 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
     a1 <- paste0(gene, "_1")
     a2 <- paste0(gene, "_2")
     if (a1 %in% names(df) && a2 %in% names(df)) {
-      df[[a2]] <- ifelse((is.na(df[[a2]]) | df[[a2]] == "") & !is.na(df[[a1]]) & df[[a1]] != "", df[[a1]], df[[a2]])
+      df[[a2]] <- ifelse(
+        (is.na(df[[a2]]) | df[[a2]] == "") &
+          !is.na(df[[a1]]) & df[[a1]] != "", df[[a1]], df[[a2]]
+      )
     }
   }
 
@@ -119,7 +150,12 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
   df <- df[, colSums(is.na(df)) < nrow(df), drop = FALSE]
 
   if (isFamilyData && all(c("FAMILY_ID", "Family_Member") %in% names(df))) {
-    df <- dplyr::mutate(df, Family_Member = forcats::fct_relevel(Family_Member, c("F", "M", "C1", "C2")))
+    df <- dplyr::mutate(
+      df,
+      Family_Member = forcats::fct_relevel(
+        Family_Member, c("F", "M", "C1", "C2")
+      )
+    )
     df <- dplyr::arrange(df, FAMILY_ID, Family_Member)
   }
 
@@ -128,7 +164,7 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
 }
 
 # ~~~~~~~~~~~~~~~~~~~~
-# decode_classical_mac()
+# decode_classical_mac
 # ~~~~~~~~~~~~~~~~~~~~
 #' Decode MAC-Encoded Alleles in Classical HLA Columns
 #'
@@ -140,8 +176,12 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
 #' @return Data frame with decoded MAC values.
 #' @export
 #' @importFrom immunotation decode_MAC
-decode_classical_mac <- function(df,
-                                 loci = c("A", "B", "C", "DRB1", "DRB3", "DRB4", "DRB5", "DQA1", "DQB1", "DPA1", "DPB1")) {
+decode_classical_mac <- function(
+    df,
+    loci = c(
+      "A", "B", "C", "DRB1", "DRB3", "DRB4",
+      "DRB5", "DQA1", "DQB1", "DPA1", "DPB1"
+    )) {
   if (!requireNamespace("immunotation", quietly = TRUE)) {
     stop("The 'immunotation' package is required. Please install it with BiocManager::install('immunotation').")
   }
@@ -170,7 +210,7 @@ decode_classical_mac <- function(df,
 }
 
 # ~~~~~~~~~~~~~~~~~~~~
-# trim_hla_results()
+# trim_hla_results
 # ~~~~~~~~~~~~~~~~~~~~
 #' Trim Resolution of HLA Alleles Across a Data Frame
 #'

@@ -4,14 +4,25 @@
 \alias{enumerate_diplotypes}
 \title{Exhaustive Diplotype Enumeration}
 \usage{
-enumerate_diplotypes(geno_row)
+enumerate_diplotypes(geno_row, separator = "/", quiet = FALSE)
 }
 \arguments{
 \item{geno_row}{A single row from collapsed genotype table.}
+
+\item{separator}{Character string that separates alleles in genotype (default = "/").}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
 A list of diplotypes with \code{hap1} and \code{hap2}.
 }
 \description{
 Returns all possible phased haplotype pairs consistent with a multilocus genotype row.
+}
+\examples{
+\dontrun{
+# Enumerate all possible diplotypes
+genotypes <- collapse_genotypes(hla_data, c("A", "B", "DRB1"))
+diplotypes <- enumerate_diplotypes(genotypes[1, ])
+}
 }

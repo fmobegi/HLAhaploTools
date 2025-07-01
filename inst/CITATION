@@ -1,0 +1,21 @@
+citHeader("To cite HLAhaploTools in publications use:")
+
+citEntry(
+  entry    = "Manual",
+  title    = "HLAhaploTools: Tools for Inference and Analysis of Extended HLA Haplotypes",
+  author   = "Fredrick Mobegi",
+  year     = "2023",
+  note     = "R package version 0.99.0",
+  url      = "https://github.com/fmobegi/HLAhaploTools",
+  textVersion = paste(
+    "Mobegi, F. (2023). HLAhaploTools: Tools for Inference and Analysis of Extended HLA Haplotypes.",
+    "R package version 0.99.0.",
+    "https://github.com/fmobegi/HLAhaploTools"
+  )
+)
+
+citFooter(
+  "The EM algorithm implementation in this package was developed with assistance from",
+  "Claude Sonnet 3.5 (Anthropic, 2023).",
+  "Please remember to cite both the package and Claude Sonnet when using this software."
+)

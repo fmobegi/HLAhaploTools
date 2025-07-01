@@ -4,14 +4,23 @@
 \alias{standardize_colnames}
 \title{Standardize HLA Genotype Column Names}
 \usage{
-standardize_colnames(df)
+standardize_colnames(df, quiet = FALSE)
 }
 \arguments{
 \item{df}{A raw HLA genotype data frame.}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
 A cleaned data frame with standardized column names.
 }
 \description{
 Converts genotype column names (e.g. A.1) to A_1 format and applies consistent lowercase styling.
+}
+\examples{
+\dontrun{
+# Standardize column names
+raw_data <- read.csv("hla_data.csv")
+clean_data <- standardize_colnames(raw_data)
+}
 }

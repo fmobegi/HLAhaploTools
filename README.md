@@ -5,15 +5,57 @@
 [![Codecov test coverage](https://codecov.io/gh/fmobegi/HLAhaploTools/graph/badge.svg)](https://app.codecov.io/gh/fmobegi/HLAhaploTools)
 <!-- badges: end -->
 
-The goal of HLAhaploTools is to ...
+The goal of HLAhaploTools is to provide a comprehensive, user-friendly toolkit for:
+
+- Standardizing and cleaning HLA genotype data from various sources
+- Estimating HLA haplotype and allele frequencies using robust EM algorithms
+- Visualizing HLA allele and haplotype distributions across populations
+- Supporting both classical (A, B, C, DRB1, DQB1, DQA1, DPB1, DPA1, DRB3, DRB4, DRB5) and non-classical HLA genes (E, F, G, H, J, K, L, MICA, MICB, HFE, DMA, DMB, DOA, DOB)
+- Facilitating downstream immunogenetics research and reporting
+
+## Supported HLA Gene Names
+
+HLAhaploTools recognizes the following gene names (case-insensitive):
+
+- **Classical HLA genes:**  
+  A, B, C, DRB1, DRB3, DRB4, DRB5, DQA1, DQB1, DPA1, DPB1
+- **Non-classical HLA genes and related loci:**  
+  E, F, G, H, J, K, L, MICA, MICB, HFE, DMA, DMB, DOA, DOB
+
+Example of allowed non-classical gene names:  
+E, F, G, H, J, K, L, MICA, MICB, HFE, DMA, DMB, DOA, DOB
 
 ## Installation
 
-You can install the development version of HLAhaploTools from [GitHub](https://github.com/) with:
+You can install **HLAhaploTools** as a stable release from Bioconductor with:
 
 ```r
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("HLAhaploTools")
+```
+
+Development versions can be accessed directly from GitHub using one of the following methods:
+
+```r
+
+# Using pak
+
 # install.packages("pak")
+
 pak::pak("fmobegi/HLAhaploTools")
+
+# Using devtools
+
+# install.packages("devtools")
+
+devtools::install_github("fmobegi/HLAhaploTools")
+
+# Using remotes
+
+# install.packages("remotes")
+
+remotes::install_github("fmobegi/HLAhaploTools")
 ```
 
 ## Example
@@ -22,13 +64,29 @@ This is a basic example which shows you how to solve a common problem:
 
 ``` r
 library(HLAhaploTools)
-## basic example code
 
+# Standardize column names
+cleaned <- standardize_colnames(raw_hla_data)
+
+# Extract loci
+loci <- extract_loci(cleaned)
+
+# Collapse genotypes
+geno <- collapse_genotypes(cleaned, loci)
+
+# Estimate haplotype frequencies
+freqs <- run_em_algorithm(all_diplotypes)
+
+# Plot allele frequencies (supports classical and non-classical genes)
+Plot_HLA_allele_frequency(freqs)
+
+# Plot diversity for a non-classical gene
+Plot_HLA_diversity(freqs, gene = "E")
 ```
 
 ## Samples Input Formatting
 
-The input data should be a tabular file (CSV, TSV, or similar) with the following structure and column names. Each row corresponds to a family member with their HLA typing data:
+The input data should be a tabular file (Coma-separated file CSV, TAB-separates TSV/TXT, Excel worksheet XLSX/XLS, or similar) with the following structure and column names. Each row corresponds to a family member with their HLA typing data:
 
 | FAMILY_ID | Family_Member | A_1   | A_2   | B_1   | B_2   | C_1   | C_2   | DRB1_1 | DRB1_2 | DRB3_1 | DRB3_2 | DRB4_1 | DRB4_2 | DRB5_1 | DRB5_2 | DQA1_1 | ... |
 |-----------|---------------|-------|-------|-------|-------|-------|-------|--------|--------|--------|--------|--------|--------|--------|--------|--------|-----|
@@ -39,9 +97,22 @@ The input data should be a tabular file (CSV, TSV, or similar) with the followin
 
 *Note: Allele values can be presented in full gene format (e.g., `A*01:01`), or in allele-only format (e.g., `*01:01` or `01:01`).
 Family members (`Family_Member` column) must be designated as one of `F` for father, `M` for mother, or `C1, C2, Cn`, ... for children.
-If your data is not `family typing data`, you can exclude this column.*
+If your data is not `family typing data`, you can exclude this column and provide a samples identifier column with unique values.*
 
-### Required column names
+### Accepted column names
+
+HLAhaploTools accepts a flexible naming convention for input columns. The package will automatically recognize and standardize various column name formats:
+
+- **Standard naming format**: `GENE_1` and `GENE_2` (e.g., `A_1`, `A_2`)
+- **Alternative formats**:
+  - `GENE.1` and `GENE.2` (e.g., `A.1`, `A.2`)
+  - `GENE1` and `GENE2` (e.g., `A1`, `A2`)
+  - `GENE-1` and `GENE-2` (e.g., `A-1`, `A-2`)
+  - `GENE_ALLELE1` and `GENE_ALLELE2` (e.g., `A_ALLELE1`, `A_ALLELE2`)
+
+The standardization process will convert all recognized column names to the preferred format (`GENE_1`, `GENE_2`). The package supports all classical and non-classical HLA genes as listed below:
+
+
 
 <!-- | Description    | Column Name in file   |
 |----------------|-----------------------|
@@ -154,7 +225,27 @@ If your data is not `family typing data`, you can exclude this column.*
       <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*MICB</td>
       <td style="border: 0.5px solid #ddd; padding: 4px 6px;">MICB_1, MICB_2</td>
     </tr>
+        <tr>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*HFE</td>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HFE_1, HFE_2</td>
+    </tr>
+    <tr>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*DMA</td>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">DMA_1, DMA_2</td>
+    </tr>
+    <tr>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*DMB</td>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">DMB_1, DMB_2</td>
+    </tr>
+    <tr>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*DOA</td>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">DOA_1, DOA_2</td>
+    </tr>
+    <tr>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">HLA*DOB</td>
+      <td style="border: 0.5px solid #ddd; padding: 4px 6px;">DOB_1, DOB_2</td>
+    </tr>
   </tbody>
 </table>
 
-# 
+#

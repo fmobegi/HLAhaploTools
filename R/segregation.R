@@ -1,6 +1,6 @@
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# compute_HLA_segregation()
-# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~
+# compute_hla_segregation
+# ~~~~~~~~~~~~~~~~~~~~~~~
 #' Compute Sorted and Cleaned HLA Haplotypes (Verbose)
 #'
 #' Extracts haplotypes by sorting allele pairs, decoding multi-alleles,
@@ -14,7 +14,7 @@
 #'
 #' @importFrom dplyr select mutate filter all_of bind_rows
 #' @importFrom tidyr pivot_longer separate_rows unite pivot_wider
-compute_HLA_segregation <- function(hped, collapse = "~") {
+compute_hla_segregation <- function(hped, collapse = "~") {
   message("\t🔄 START Family segregation Analysis")
 
   required <- c("FAMILY_ID", "Family_Member")
@@ -49,13 +49,15 @@ compute_HLA_segregation <- function(hped, collapse = "~") {
   message("\t📐 2. Reshaping to long format and decoding MAC strings...")
   long_df <- hped %>%
     dplyr::select(FAMILY_ID, Family_Member, dplyr::all_of(allele_cols)) %>%
-    tidyr::pivot_longer(-c(FAMILY_ID, Family_Member),
+    tidyr::pivot_longer(
+      -c(FAMILY_ID, Family_Member),
       names_to   = c("locus", "copy"),
       names_sep  = "_",
       values_to  = "allele"
     ) %>%
     tidyr::separate_rows(allele, sep = "/") %>%
-    dplyr::filter(!is.na(allele) & allele != "" & allele != "NULL") %>%
+    dplyr::filter(!is.na(allele) &
+      allele != "" & allele != "NULL") %>%
     dplyr::mutate(copy = paste0("H", copy)) %>%
     tidyr::unite("locus_copy", locus, copy, sep = "_") %>%
     tidyr::pivot_wider(names_from = locus_copy, values_from = allele)
@@ -72,12 +74,22 @@ compute_HLA_segregation <- function(hped, collapse = "~") {
   clean_and_unite <- function(df, cols, label) {
     df %>%
       dplyr::select(FAMILY_ID, Family_Member, dplyr::all_of(cols)) %>%
-      dplyr::mutate(dplyr::across(
+      dplyr::mutate(dplyr::across(dplyr::all_of(cols), ~ ifelse(
+        . %in% c("NA", "NULL", "", NA), NA_character_, .
+      ))) %>%
+      tidyr::unite("haplotype",
         dplyr::all_of(cols),
-        ~ ifelse(. %in% c("NA", "NULL", "", NA), NA_character_, .)
-      )) %>%
-      tidyr::unite("haplotype", dplyr::all_of(cols), sep = collapse, na.rm = TRUE) %>%
-      dplyr::mutate(haplotype_id = paste(FAMILY_ID, Family_Member, label, sep = "_"))
+        sep = collapse,
+        na.rm = TRUE
+      ) %>%
+      dplyr::mutate(
+        haplotype_id = paste(
+          FAMILY_ID,
+          Family_Member,
+          label,
+          sep = "_"
+        )
+      )
   }
 
   hap1 <- clean_and_unite(long_df, hap1_cols, "H1")
@@ -85,8 +97,18 @@ compute_HLA_segregation <- function(hped, collapse = "~") {
 
   message("\t✅ END Family segregation: Merging results...")
   result <- dplyr::bind_rows(hap1, hap2) %>%
-    dplyr::select(FAMILY_ID, Family_Member, haplotype_id, haplotype, dplyr::everything())
+    dplyr::select(
+      FAMILY_ID,
+      Family_Member,
+      haplotype_id,
+      haplotype,
+      dplyr::everything()
+    )
 
-  message(sprintf("\t🏁 Extracted %d haplotypes across %d records.\n", nrow(result), nrow(hped)))
+  message(sprintf(
+    "\t🏁 Extracted %d haplotypes across %d records.\n",
+    nrow(result),
+    nrow(hped)
+  ))
   return(result)
 }

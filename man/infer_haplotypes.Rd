@@ -2,26 +2,63 @@
 % Please edit documentation in R/EM.R
 \name{infer_haplotypes}
 \alias{infer_haplotypes}
-\title{EM-Based Inference of Multilocus HLA Haplotypes}
+\title{Infer HLA Haplotype Frequencies from Genotype Data}
 \usage{
-infer_haplotypes(df, max_iter = 100, epsilon = 1e-05)
+infer_haplotypes(
+  df,
+  loci = NULL,
+  max_iter = 100,
+  epsilon = 1e-05,
+  parallel = TRUE,
+  n_workers = NULL,
+  quiet = FALSE,
+  isFamily = FALSE
+)
 }
 \arguments{
-\item{df}{A data frame of unphased HLA genotypes. Column names must follow \if{html}{\out{<locus>}}_1 and \if{html}{\out{<locus>}}_2 structure.}
+\item{df}{A data frame with HLA allele columns (e.g. A_1, A_2, B_1, B_2).}
 
-\item{max_iter}{Maximum number of EM iterations. Default is 100.}
+\item{loci}{Character vector of loci to include. If NULL, all detected loci are used.}
 
-\item{epsilon}{Convergence threshold for EM algorithm. Default is 1e-5.}
+\item{max_iter}{Maximum number of EM iterations (default = 100).}
+
+\item{epsilon}{Convergence threshold (default = 1e-5).}
+
+\item{parallel}{Logical. If TRUE (default), use parallel processing when available.}
+
+\item{n_workers}{Number of workers for parallel processing. If NULL, auto-detect.}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
+
+\item{isFamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
 }
 \value{
-A list with:
+A list containing:
 \describe{
-\item{frequencies}{A tibble of haplotypes and their estimated frequencies}
-\item{posteriors}{A list of posterior diplotype probabilities per individual}
-\item{top_diplotypes}{A tibble with one inferred diplotype per individual}
+\item{haplotype_frequencies}{A tibble with haplotype frequencies}
+\item{posteriors}{A list of posterior diplotype probabilities per subject}
+\item{top_diplotypes}{A tibble with most likely diplotype for each subject}
+\item{loci_used}{Character vector of loci included in the analysis}
+\item{convergence}{Logical. Whether the EM algorithm converged}
+\item{iterations}{Number of iterations performed}
 }
 }
 \description{
-Runs EM algorithm on HLA genotype data to estimate haplotype frequencies
-and assign most likely diplotype per individual.
+Master function that performs full haplotype frequency inference using the EM algorithm.
+Takes genotype data, enumerates all possible diplotypes, and estimates haplotype frequencies.
+}
+\examples{
+\dontrun{
+# Infer haplotypes from all loci
+result <- infer_haplotypes(hla_data)
+
+# Infer haplotypes from specific loci
+result <- infer_haplotypes(hla_data, loci = c("A", "B", "DRB1"))
+
+# Force sequential processing
+result <- infer_haplotypes(hla_data, parallel = FALSE)
+
+# Process family data
+family_results <- infer_haplotypes(family_data, isFamily = TRUE)
+}
 }

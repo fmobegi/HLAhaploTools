@@ -4,16 +4,29 @@
 \alias{collapse_genotypes}
 \title{Collapse Allele Pairs Into Per-Locus Genotypes}
 \usage{
-collapse_genotypes(df, loci)
+collapse_genotypes(df, loci, separator = "/", quiet = FALSE, isFamily = TRUE)
 }
 \arguments{
 \item{df}{A data frame with per-locus allele columns.}
 
 \item{loci}{A character vector of locus names to collapse.}
+
+\item{separator}{Character string to separate alleles in genotype (default = "/").}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
+
+\item{isFamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
 }
 \value{
 A tibble with ID and one genotype column per gene.
 }
 \description{
-Combines paired allele fields (e.g. A_1 and A_2) into a string like A\emph{01/A}02.
+Combines paired allele fields (e.g. A_1 and A_2) into a string like A\emph{01:01/A}01:02.
+}
+\examples{
+\dontrun{
+# Collapse allele pairs into genotypes
+loci <- extract_loci(hla_data)
+genotypes <- collapse_genotypes(hla_data, loci)
+}
 }
