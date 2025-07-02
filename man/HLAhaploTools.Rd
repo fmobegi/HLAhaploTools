@@ -11,7 +11,7 @@ HLAhaploTools(
   filepath,
   trim = FALSE,
   resolution = 3,
-  isFamily = NULL,
+  isfamily = NULL,
   mac = TRUE,
   plot_freq = FALSE,
   plot_count = FALSE,
@@ -31,7 +31,7 @@ HLAhaploTools(
 
 \item{resolution}{Integer. Trimming resolution (fields) for \code{trim_hla_results()} (default = 3).}
 
-\item{isFamily}{Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.}
+\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.}
 
 \item{mac}{Logical. If TRUE, decode multi-allele codes (default = FALSE).}
 

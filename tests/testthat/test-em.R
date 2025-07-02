@@ -17,7 +17,7 @@ create_mini_test_data <- function() {
     B_2 = c("B*08:01", "B*44:02", "B*35:01", "B*44:02", "B*44:02"),
     stringsAsFactors = FALSE
   )
-  return(test_data)
+  test_data
 }
 
 #' Prepare Synthetic Genotype Data for Testing
@@ -43,11 +43,11 @@ prepare_test_data <- function() {
     B = paste(test_data$B_1, test_data$B_2, sep = "/"),
     stringsAsFactors = FALSE
   )
-  return(list(
+  list(
     test_data = test_data,
     genotypes = genotypes,
     loci = loci
-  ))
+  )
 }
 
 test_that("standardize_colnames works", {
@@ -124,7 +124,10 @@ test_that("enumerate_diplotypes works", {
   # Check that all alleles are present across all diplotypes
   all_haps <- unlist(lapply(diplotypes, function(d) c(d$hap1, d$hap2)))
   expect_true(all(c("A*01:01", "A*02:01", "B*07:02", "B*08:01") %in%
-    unlist(strsplit(paste(all_haps, collapse = " "), "[^A-Z0-9*:]+"))))
+    unlist(strsplit(
+      paste(all_haps, collapse = " "),
+      "[^A-Z0-9*:]+"
+    ))))
 
   # Check that we have both possible combinations
   patterns <- c(

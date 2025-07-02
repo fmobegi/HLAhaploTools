@@ -4,12 +4,12 @@
 \alias{reformat_typing_data}
 \title{Reformat and Verbosely Validate Raw HLA Typing Data}
 \usage{
-reformat_typing_data(df, isFamilyData = TRUE)
+reformat_typing_data(df, isfamilydata = TRUE)
 }
 \arguments{
 \item{df}{A data frame or tibble containing raw HLA typing data.}
 
-\item{isFamilyData}{Logical. Default TRUE. If FALSE, Family_Member sorting is skipped.}
+\item{isfamilydata}{Logical. Default TRUE. If FALSE, Family_Member sorting is skipped.}
 }
 \value{
 A tibble with cleaned and reported HLA allele fields.

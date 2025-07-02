@@ -4,7 +4,7 @@
 \alias{collapse_genotypes}
 \title{Collapse Allele Pairs Into Per-Locus Genotypes}
 \usage{
-collapse_genotypes(df, loci, separator = "/", quiet = FALSE, isFamily = TRUE)
+collapse_genotypes(df, loci, separator = "/", quiet = FALSE, isfamily = TRUE)
 }
 \arguments{
 \item{df}{A data frame with per-locus allele columns.}
@@ -15,7 +15,7 @@ collapse_genotypes(df, loci, separator = "/", quiet = FALSE, isFamily = TRUE)
 
 \item{quiet}{Logical. If TRUE, suppresses status messages.}
 
-\item{isFamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
+\item{isfamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
 }
 \value{
 A tibble with ID and one genotype column per gene.

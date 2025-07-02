@@ -1,6 +1,16 @@
-# Test main workflow function with minimal test data
-
-# Create a minimal synthetic dataset for testing
+#' Create Minimal Synthetic HLA Test Data
+#'
+#' Generates a small synthetic data frame with HLA allele information and writes it to a temporary CSV file.
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{data}{The synthetic data frame}
+#'   \item{file}{The path to the temporary CSV file}
+#' }
+#' @examples
+#' example_data <- create_mini_test_data()
+#' print(example_data$data)
+#' read.csv(example_data$file)
 create_mini_test_data <- function() {
   test_data <- data.frame(
     ID = c("S1", "S2", "S3"),
@@ -11,46 +21,59 @@ create_mini_test_data <- function() {
     stringsAsFactors = FALSE
   )
 
-  # Save to a temp file for testing
   temp_file <- tempfile(fileext = ".csv")
   write.csv(test_data, temp_file, row.names = FALSE)
 
-  return(list(data = test_data, file = temp_file))
+  list(data = test_data, file = temp_file)
 }
 
-# Override run_em_algorithm with a fast test version
-test_override_em <- function() {
-  # Store original function
-  original_run_em <- run_em_algorithm
 
-  # Override with fast test version that uses minimal iterations
-  run_em_algorithm <- function(all_diplotypes, epsilon = 1e-5, max_iter = 100,
-                               parallel = TRUE, n_workers = NULL, quiet = FALSE) {
-    # For testing, use only 3 iterations max
+#' Temporarily Override EM Algorithm for Faster Testing
+#'
+#' Replaces the `run_em_algorithm` function with a simplified version for test purposes
+#' that returns uniform haplotype frequencies and sets convergence to TRUE after a few iterations.
+#'
+#' @return A function that restores the original `run_em_algorithm` when called.
+#' @examples
+#' restore <- test_override_em()
+#' # run tests...
+#' restore() # restores original function
+test_override_em <- function() {
+  # Store original function from calling environment
+  original_run_em <- get("run_em_algorithm", envir = parent.env(environment()))
+
+  # Create override function
+  override <- function(all_diplotypes, epsilon = 1e-5, max_iter = 100,
+                       parallel = TRUE, n_workers = NULL, quiet = FALSE) {
     max_iter <- min(3, max_iter)
 
-    # Get all unique haplotypes
     all_haps <- unique(unlist(lapply(all_diplotypes, function(diplotypes) {
       unlist(lapply(diplotypes, function(d) c(d$hap1, d$hap2)))
     })))
 
-    # Initialize frequencies
     hap_freqs <- rep(1 / length(all_haps), length(all_haps))
     names(hap_freqs) <- all_haps
-
-    # Set convergence attributes
     attr(hap_freqs, "converged") <- TRUE
     attr(hap_freqs, "iterations") <- max_iter
-
-    return(hap_freqs)
+    hap_freqs
   }
 
-  # Return a function to restore the original
-  function() {
-    run_em_algorithm <- original_run_em
-  }
+  # Assign override in global environment
+  assign("run_em_algorithm", override, envir = .GlobalEnv)
+
+  # Return restorer
+  function() assign("run_em_algorithm", original_run_em, envir = .GlobalEnv)
 }
 
+#' @test Check if main HLAhaploTools pipeline runs successfully on minimal input
+#'
+#' This test:
+#' - creates synthetic data
+#' - overrides the EM algorithm for speed
+#' - runs the full pipeline with fast settings
+#' - verifies output structure and presence of key results
+#'
+#' Skips the test gracefully if the pipeline throws an error.
 test_that("HLAhaploTools main function works with minimal test data", {
   # Create test data
   test_data <- create_mini_test_data()

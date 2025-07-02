@@ -68,20 +68,20 @@ load_typing_data <- function(filepath, sheet = NULL, ...) {
 #' filling missing second allele calls, and reordering records.
 #'
 #' @param df A data frame or tibble containing raw HLA typing data.
-#' @param isFamilyData Logical. Default TRUE. If FALSE, Family_Member sorting is skipped.
+#' @param isfamilydata Logical. Default TRUE. If FALSE, Family_Member sorting is skipped.
 #'
 #' @return A tibble with cleaned and reported HLA allele fields.
 #' @export
 #' @importFrom janitor clean_names
 #' @importFrom dplyr across mutate arrange
 #' @importFrom forcats fct_relevel
-reformat_typing_data <- function(df, isFamilyData = TRUE) {
+reformat_typing_data <- function(df, isfamilydata = TRUE) {
   if (!is.data.frame(df)) stop("\t❌ Input must be a data frame or tibble.")
 
   df <- janitor::clean_names(df, case = "none")
   df <- dplyr::mutate(df, dplyr::across(where(is.character), trimws))
 
-  id_cols <- if (isFamilyData) c("FAMILY_ID", "Family_Member") else "FAMILY_ID"
+  id_cols <- if (isfamilydata) c("FAMILY_ID", "Family_Member") else "FAMILY_ID"
 
   class1 <- c("A_1", "A_2", "B_1", "B_2", "C_1", "C_2")
   class2 <- c(
@@ -149,7 +149,7 @@ reformat_typing_data <- function(df, isFamilyData = TRUE) {
   df <- df[rowSums(is.na(df)) < ncol(df), , drop = FALSE]
   df <- df[, colSums(is.na(df)) < nrow(df), drop = FALSE]
 
-  if (isFamilyData && all(c("FAMILY_ID", "Family_Member") %in% names(df))) {
+  if (isfamilydata && all(c("FAMILY_ID", "Family_Member") %in% names(df))) {
     df <- dplyr::mutate(
       df,
       Family_Member = forcats::fct_relevel(
@@ -209,24 +209,20 @@ decode_classical_mac <- function(
   return(df)
 }
 
-# ~~~~~~~~~~~~~~~~~~~~
-# trim_hla_results
-# ~~~~~~~~~~~~~~~~~~~~
 #' Trim Resolution of HLA Alleles Across a Data Frame
 #'
 #' Applies `HLAtools::multiAlleleTrim()` to all columns in a tibble or data frame,
 #' reducing allele resolution (e.g., from 4-field to 2-field notation).
-#'
-#' NA values and empty strings are preserved, and trimming failures are gracefully handled with fallback warnings.
+#' NA values and empty strings are preserved, and trimming failures are gracefully handled.
 #'
 #' @param df A tibble or data frame with HLA alleles as character columns.
-#' @param resolution Integer. Desired resolution level (e.g., 2 or 4). Default is 3.
+#' @param resolution Integer. Desired resolution level (e.g., 2 or 4). Default is 4.
 #' @param append Logical. If TRUE (default), ambiguity suffixes (e.g., "G", "N") are retained after trimming.
 #'
 #' @return A tibble with trimmed allele values.
-#' @export
 #' @importFrom HLAtools multiAlleleTrim
 #' @importFrom tibble as_tibble
+#' @export
 trim_hla_results <- function(df, resolution = 3, append = TRUE) {
   df[] <- lapply(df, function(col) {
     sapply(col, function(allele) {
@@ -236,7 +232,7 @@ trim_hla_results <- function(df, resolution = 3, append = TRUE) {
       tryCatch(
         HLAtools::multiAlleleTrim(allele, resolution = resolution, append = append),
         error = function(e) {
-          message(sprintf("\t⚠️ Trimming failed for '%s' — keeping original.", allele))
+          message(sprintf("\t⚠️ Trimming failed for '%s' — returning original.", allele))
           allele
         }
       )
@@ -244,5 +240,5 @@ trim_hla_results <- function(df, resolution = 3, append = TRUE) {
   })
 
   message("\t✅ Allele resolution trimming complete.")
-  return(tibble::as_tibble(df))
+  tibble::as_tibble(df)
 }

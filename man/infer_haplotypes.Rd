@@ -12,7 +12,7 @@ infer_haplotypes(
   parallel = TRUE,
   n_workers = NULL,
   quiet = FALSE,
-  isFamily = FALSE
+  isfamily = FALSE
 )
 }
 \arguments{
@@ -30,7 +30,7 @@ infer_haplotypes(
 
 \item{quiet}{Logical. If TRUE, suppresses status messages.}
 
-\item{isFamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
+\item{isfamily}{Logical. If TRUE, uses FAMILY_ID and Family_Member for identification.}
 }
 \value{
 A list containing:
@@ -59,6 +59,6 @@ result <- infer_haplotypes(hla_data, loci = c("A", "B", "DRB1"))
 result <- infer_haplotypes(hla_data, parallel = FALSE)
 
 # Process family data
-family_results <- infer_haplotypes(family_data, isFamily = TRUE)
+family_results <- infer_haplotypes(family_data, isfamily = TRUE)
 }
 }

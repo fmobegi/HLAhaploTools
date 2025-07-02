@@ -36,8 +36,6 @@ result <- infer_haplotypes(hla_data)
 p <- plot_top_haplotypes(result$haplotype_frequencies)
 
 # Customize to show only top 10 with higher threshold
-p <- plot_top_haplotypes(result$haplotype_frequencies,
-  n_top = 10, min_freq = 0.02
-)
+p <- plot_top_haplotypes(result$haplotype_frequencies, n_top = 10, min_freq = 0.02)
 }
 }

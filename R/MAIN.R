@@ -9,7 +9,7 @@
 #' @param filepath Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).
 #' @param trim Logical. If TRUE, apply `trim_hla_results()` (default = FALSE).
 #' @param resolution Integer. Trimming resolution (fields) for `trim_hla_results()` (default = 3).
-#' @param isFamily Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.
+#' @param isfamily Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.
 #' @param mac Logical. If TRUE, decode multi-allele codes (default = FALSE).
 #' @param plot_freq Logical. If TRUE, display allele frequency plot (default = FALSE).
 #' @param plot_count Logical. If TRUE, display unique allele count plot (default = FALSE).
@@ -40,7 +40,7 @@
 HLAhaploTools <- function(filepath,
                           trim = FALSE,
                           resolution = 3,
-                          isFamily = NULL,
+                          isfamily = NULL,
                           mac = TRUE,
                           plot_freq = FALSE,
                           plot_count = FALSE,
@@ -61,7 +61,7 @@ HLAhaploTools <- function(filepath,
     message(sprintf("\tTrim: %s (default resolution: %d)", trim, resolution)) #
     message(sprintf(
       "\tFamily data: %s",
-      ifelse(is.null(isFamily), "Auto-detect", isFamily)
+      ifelse(is.null(isfamily), "Auto-detect", isfamily)
     ))
     message(sprintf("\tDecode MAC: %s", mac))
     message(sprintf("\tPlot allele frequency: %s", plot_freq))
@@ -88,21 +88,21 @@ HLAhaploTools <- function(filepath,
 
   # Step 2: Detect or use provided data type info
   detect_result <- NULL
-  if (is.null(isFamily)) {
+  if (is.null(isfamily)) {
     if (!quiet) message("\n🔍 Step 2: Auto-detecting data format...")
-    detect_result <- detectDataType(df_raw, quiet = quiet)
-    is_Family <- detect_result$is_family
+    detect_result <- detect_data_type(df_raw, quiet = quiet)
+    family_data_val <- detect_result$is_family
   } else {
-    is_Family <- isFamily
+    family_data_val <- isfamily
     if (!quiet) {
       message(
         "\nℹ️ Data format explicitly provided as ",
-        ifelse(isFamily, "'FAMILY STUDY'", "'REGULAR TYPING'"),
+        ifelse(isfamily, "'FAMILY STUDY'", "'REGULAR TYPING'"),
         "; skipping auto-detection."
       )
     }
     # Still run detection internally but quietly to get IDs and columns for downstream use
-    detect_result <- detectDataType(df_raw, quiet = TRUE)
+    detect_result <- detect_data_type(df_raw, quiet = TRUE)
   }
 
   # Assign relevant ID columns from detection
@@ -123,15 +123,15 @@ HLAhaploTools <- function(filepath,
   }
 
   # Validate data structure based on detected type
-  if (is_Family) {
+  if (family_data_val) {
     if (!quiet) message("\n✓ Data format detected: FAMILY STUDY")
-    valid <- validateFamilyData(df_raw,
+    valid <- validate_family_data(df_raw,
       stop_if_invalid = TRUE,
       verbose = !quiet
     )
   } else {
     if (!quiet) message("\n✓ Data format detected: REGULAR TYPING")
-    valid <- validateRegularData(df_raw,
+    valid <- validate_regular_data(df_raw,
       stop_if_invalid = TRUE,
       verbose = !quiet
     )
@@ -144,7 +144,7 @@ HLAhaploTools <- function(filepath,
   if (!quiet) {
     message("\n🧹 Step 3: Reformatting data...")
   }
-  df_formatted <- reformat_typing_data(df_raw, isFamilyData = is_Family, quiet = quiet)
+  df_formatted <- reformat_typing_data(df_raw, isfamilydata = family_data_val, quiet = quiet)
   qc_report <- attr(df_formatted, "qc")
 
   # Step 4: Check deleted alleles
@@ -263,8 +263,7 @@ HLAhaploTools <- function(filepath,
 
   if (plot_diversity) {
     # Check if there are multiple populations to compare
-    if ("population" %in% names(df_allele_freq) &&
-      length(unique(df_allele_freq$population)) > 1) {
+    if ("population" %in% names(df_allele_freq) && length(unique(df_allele_freq$population)) > 1) {
       for (g in unique(gene)) {
         if (!quiet) {
           message(sprintf("\n🌐 Generating diversity plot for gene: %s", g))
@@ -294,7 +293,7 @@ HLAhaploTools <- function(filepath,
     parallel = parallel,
     n_workers = n_workers,
     quiet = quiet,
-    isFamily = is_Family
+    isfamily = family_data_val
   )
 
   hap_freqs <- haplotype_results$haplotype_frequencies

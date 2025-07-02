@@ -145,7 +145,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
     ))
   }
 
-  return(df_freq)
+  df_freq
 }
 
 
@@ -158,7 +158,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 #' Automatically splits classical and non-classical HLA genes into separate panels with nested facets.
 #'
 #' @param freq_data A data frame with gene, allele, and freq columns.
-#' @param minFreq Minimum frequency threshold (default = 0.05) above which allele labels are shown.
+#' @param min_freq Minimum frequency threshold (default = 0.05) above which allele labels are shown.
 #' @param split_threshold Threshold for number of unique genes that triggers multi-panel layout (default = 11).
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
@@ -170,7 +170,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 #' @importFrom ggh4x facet_nested
 #' @export
 plot_hla_allele_frequency <- function(freq_data,
-                                      minFreq = 0.05,
+                                      min_freq = 0.05,
                                       split_threshold = 11,
                                       quiet = FALSE) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
@@ -199,23 +199,23 @@ plot_hla_allele_frequency <- function(freq_data,
   }
 
   # Gene classification
-  class_I <- c("A", "B", "C")
-  class_II <- c("DPA1", "DPB1", "DQA1", "DQB1", "DRB1", "DRB3", "DRB4", "DRB5")
-  nonclass_I <- c("E", "F", "G", "H", "J", "MICA", "MICB", "HFE")
-  nonclass_II <- c("DMA", "DMB", "DOA", "DOB")
+  class_i <- c("A", "B", "C")
+  class_ii <- c("DPA1", "DPB1", "DQA1", "DQB1", "DRB1", "DRB3", "DRB4", "DRB5")
+  nonclass_i <- c("E", "F", "G", "H", "J", "MICA", "MICB", "HFE")
+  nonclass_ii <- c("DMA", "DMB", "DOA", "DOB")
 
   freq_data <- freq_data %>%
     dplyr::mutate(
       super_class = dplyr::case_when(
-        gene %in% c(class_I, class_II) ~ "Classical",
-        gene %in% c(nonclass_I, nonclass_II) ~ "Nonclassical",
+        gene %in% c(class_i, class_ii) ~ "Classical",
+        gene %in% c(nonclass_i, nonclass_ii) ~ "Nonclassical",
         TRUE ~ "Other"
       ),
       labels = dplyr::case_when(
-        gene %in% class_I ~ "Class I",
-        gene %in% class_II ~ "Class II",
-        gene %in% nonclass_I ~ "Class I",
-        gene %in% nonclass_II ~ "Class II",
+        gene %in% class_i ~ "Class I",
+        gene %in% class_ii ~ "Class II",
+        gene %in% nonclass_i ~ "Class I",
+        gene %in% nonclass_ii ~ "Class II",
         TRUE ~ "Other"
       )
     )
@@ -257,8 +257,8 @@ plot_hla_allele_frequency <- function(freq_data,
   # Faceted panel builder
   create_nested_panel <- function(data, title = NULL) {
     if (nrow(data) == 0) {
-      return(ggplot2::ggplot() +
-        ggplot2::theme_void())
+      ggplot2::ggplot() +
+        ggplot2::theme_void()
     }
 
     if (!quiet) {
@@ -271,7 +271,7 @@ plot_hla_allele_frequency <- function(freq_data,
     plot_data <- data %>%
       dplyr::group_by(gene) %>%
       dplyr::mutate(
-        allele_label = ifelse(freq >= minFreq, allele, "Other"),
+        allele_label = ifelse(freq >= min_freq, allele, "Other"),
         allele_label = tidyr::replace_na(allele_label, "Other")
       ) %>%
       dplyr::group_by(super_class, labels, gene, allele_label) %>%
@@ -297,7 +297,7 @@ plot_hla_allele_frequency <- function(freq_data,
       ) +
       ggplot2::geom_text(
         ggplot2::aes(label = ifelse(
-          freq >= minFreq * 2,
+          freq >= min_freq * 2,
           sprintf("%s\n(%.1f%%)", allele_label, freq * 100),
           ""
         )),
@@ -408,10 +408,10 @@ plot_hla_allele_count <- function(freq_data,
   }
 
   # Gene classification to report classes found
-  class_I <- c("A", "B", "C")
-  class_II <- c("DPA1", "DPB1", "DQA1", "DQB1", "DRB1", "DRB3", "DRB4", "DRB5")
-  nonclass_I <- c("E", "F", "G", "H", "J", "MICA", "MICB", "HFE")
-  nonclass_II <- c("DMA", "DMB", "DOA", "DOB")
+  class_i <- c("A", "B", "C")
+  class_ii <- c("DPA1", "DPB1", "DQA1", "DQB1", "DRB1", "DRB3", "DRB4", "DRB5")
+  nonclass_i <- c("E", "F", "G", "H", "J", "MICA", "MICB", "HFE")
+  nonclass_ii <- c("DMA", "DMB", "DOA", "DOB")
 
   # Count unique alleles per gene
   if (!quiet) {
@@ -439,15 +439,15 @@ plot_hla_allele_count <- function(freq_data,
   found_genes <- allele_counts$gene
   classical_genes <- sort(unique(
     found_genes[found_genes %in%
-      c(class_I, class_II)]
+      c(class_i, class_ii)]
   ))
   nonclassical_genes <- sort(unique(
     found_genes[found_genes %in%
-      c(nonclass_I, nonclass_II)]
+      c(nonclass_i, nonclass_ii)]
   ))
   other_genes <- sort(unique(
     found_genes[!found_genes %in%
-      c(class_I, class_II, nonclass_I, nonclass_II)]
+      c(class_i, class_ii, nonclass_i, nonclass_ii)]
   ))
 
   if (!quiet) {
@@ -565,9 +565,11 @@ plot_hla_diversity <- function(freq_data,
 
   if (nrow(gene_data) == 0) {
     warning(sprintf("\t⚠️ No allele data found for gene '%s'.", gene))
-    return(ggplot2::ggplot() +
-      ggplot2::theme_void() +
-      ggplot2::ggtitle(sprintf("No allele data for %s", gene)))
+    return(
+      ggplot2::ggplot() +
+        ggplot2::theme_void() +
+        ggplot2::ggtitle(sprintf("No allele data for %s", gene))
+    )
   }
 
   if (!quiet) {
