@@ -72,7 +72,8 @@ test_that("infer_haplotypes works with minimal synthetic data", {
   results <- infer_haplotypes(
     df = read.csv(test_file),
     parallel = FALSE,
-    quiet = TRUE
+    quiet = TRUE,
+    isfamily = FALSE
   )
 
   # Check results structure

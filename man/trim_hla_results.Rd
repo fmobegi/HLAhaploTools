@@ -4,14 +4,16 @@
 \alias{trim_hla_results}
 \title{Trim Resolution of HLA Alleles Across a Data Frame}
 \usage{
-trim_hla_results(df, resolution = 3, append = TRUE)
+trim_hla_results(df, resolution = 3, append = TRUE, quiet = FALSE)
 }
 \arguments{
 \item{df}{A tibble or data frame with HLA alleles as character columns.}
 
-\item{resolution}{Integer. Desired resolution level (e.g., 2 or 4). Default is 4.}
+\item{resolution}{Integer. Desired resolution level (e.g., 2 or 4). Default is 3.}
 
 \item{append}{Logical. If TRUE (default), ambiguity suffixes (e.g., "G", "N") are retained after trimming.}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
 A tibble with trimmed allele values.
@@ -19,5 +21,16 @@ A tibble with trimmed allele values.
 \description{
 Applies \code{HLAtools::multiAlleleTrim()} to all columns in a tibble or data frame,
 reducing allele resolution (e.g., from 4-field to 2-field notation).
-NA values and empty strings are preserved, and trimming failures are gracefully handled.
+}
+\details{
+Handles MAC-decoded alleles containing "/" separators by trimming each component.
+NA values and empty strings are preserved, and trimming failures are gracefully handled with fallback warnings.
+}
+\examples{
+\dontrun{
+# Load and trim alleles to 2-field resolution
+typed_data <- load_typing_data("hla_typing.csv") \%>\%
+  reformat_typing_data() \%>\%
+  trim_hla_results(resolution = 2)
+}
 }

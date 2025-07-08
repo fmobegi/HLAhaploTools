@@ -4,17 +4,32 @@
 \alias{reformat_typing_data}
 \title{Reformat and Verbosely Validate Raw HLA Typing Data}
 \usage{
-reformat_typing_data(df, isfamilydata = TRUE)
+reformat_typing_data(df, isfamilydata = NULL, quiet = FALSE)
 }
 \arguments{
 \item{df}{A data frame or tibble containing raw HLA typing data.}
 
-\item{isfamilydata}{Logical. Default TRUE. If FALSE, Family_Member sorting is skipped.}
+\item{isfamilydata}{Logical or NULL. If NULL (default), automatically detects data type.
+If TRUE, processes as family data. If FALSE, processes as regular typing data.}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
-A tibble with cleaned and reported HLA allele fields.
+A tibble with cleaned and formatted HLA allele data. A QC report is attached
+as an attribute (\code{attr(df, "qc")}) containing sample identifiers and DRB1–DRB3/4/5
+compliance flags.
 }
 \description{
 Cleans and formats HLA typing data by standardizing allele notations,
-filling missing second allele calls, and reordering records.
+filling missing second allele calls with DRB1–DRB3/4/5 compliance checks,
+and organizing allele columns. Automatically detects whether data is from a
+family study or regular typing format and includes relevant identifiers in the QC output.
+}
+\examples{
+\dontrun{
+raw_data <- read.csv("hla_typing.csv")
+formatted <- reformat_typing_data(raw_data)
+qc_report <- attr(formatted, "qc")
+}
+
 }

@@ -2,14 +2,18 @@
 % Please edit documentation in R/preprocess.R
 \name{load_typing_data}
 \alias{load_typing_data}
-\title{Load HLA Typing Data from CSV, TSV, or Excel}
+\title{Load HLA Typing Data from CSV, TSV, Excel or RDS}
 \usage{
-load_typing_data(filepath, sheet = NULL, ...)
+load_typing_data(filepath, sheet = NULL, quiet = FALSE, max_file_mb = 100, ...)
 }
 \arguments{
-\item{filepath}{Path to the data file (.csv, .tsv, .txt, or .xlsx).}
+\item{filepath}{Path to the data file (.csv, .tsv, .txt, .xlsx, or .rds).}
 
 \item{sheet}{Excel sheet name or index (optional; defaults to the first sheet).}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
+
+\item{max_file_mb}{Maximum file size in MB to load without warning (default = 100).}
 
 \item{...}{Additional arguments passed to the appropriate reading function.}
 }
@@ -17,6 +21,18 @@ load_typing_data(filepath, sheet = NULL, ...)
 A tibble containing the cleaned HLA typing data.
 }
 \description{
-Reads an HLA typing data file from CSV, TSV, or Excel format and returns a tibble.
+Reads an HLA typing data file from various formats and returns a tibble.
 Interprets common NA-like values (e.g., "", "NULL", "NA", "Unknown") as missing.
+}
+\examples{
+\dontrun{
+# Load from CSV
+typing_data <- load_typing_data("path/to/hla_data.csv")
+
+# Load from Excel with specific sheet
+excel_data <- load_typing_data("path/to/hla_data.xlsx", sheet = "Family1")
+
+# Load silently without messages
+quiet_load <- load_typing_data("path/to/data.tsv", quiet = TRUE)
+}
 }

@@ -218,7 +218,7 @@ test_that("infer_haplotypes works with synthetic data", {
     loci = c("A", "B"),
     parallel = FALSE,
     quiet = TRUE,
-    isFamily = FALSE # Explicitly set to FALSE to avoid warning
+    isfamily = FALSE
   )
 
   # Check results structure

@@ -80,7 +80,7 @@ HLAhaploTools <- function(filepath,
     message("\n📁 Step 1: Loading HLA typing file...")
   }
   df_raw <- tryCatch(
-    load_typing_data(filepath, sheet = sheet, quiet = quiet),
+    load_typing_data(filepath = filepath, sheet = sheet, quiet = quiet),
     error = function(e) {
       stop("\t❌ File load error: ", e$message)
     }

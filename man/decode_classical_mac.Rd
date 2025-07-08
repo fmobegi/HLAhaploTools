@@ -6,17 +6,31 @@
 \usage{
 decode_classical_mac(
   df,
-  loci = c("A", "B", "C", "DRB1", "DRB3", "DRB4", "DRB5", "DQA1", "DQB1", "DPA1", "DPB1")
+  loci = c("A", "B", "C", "DRB1", "DRB3", "DRB4", "DRB5", "DQA1", "DQB1", "DPA1", "DPB1"),
+  quiet = FALSE
 )
 }
 \arguments{
 \item{df}{A data frame with HLA allele columns (e.g. A_1, B_2, etc).}
 
 \item{loci}{Optional set of classical genes to decode.}
+
+\item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
 Data frame with decoded MAC values.
 }
 \description{
 Uses immunotation to decode multi-allele codes (MAC) in classical HLA loci.
+}
+\examples{
+\dontrun{
+# Decode all classical loci
+typed_data <- load_typing_data("hla_typing.csv") \%>\%
+  reformat_typing_data() \%>\%
+  decode_classical_mac()
+
+# Only decode Class I loci
+class1_decoded <- decode_classical_mac(typed_data, loci = c("A", "B", "C"))
+}
 }
