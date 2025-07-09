@@ -2,19 +2,20 @@
 % Please edit documentation in R/segregation.R
 \name{compute_hla_segregation}
 \alias{compute_hla_segregation}
-\title{Compute Sorted and Cleaned HLA Haplotypes (Verbose)}
+\title{For each family, identify parental haplotypes, infer inheritance pattern per child,
+and reconstruct child haplotypes directly using inferred segregation (e.g. AC, BD).}
 \usage{
 compute_hla_segregation(hped, collapse = "~")
 }
 \arguments{
-\item{hped}{A data frame with paired HLA columns, including FAMILY_ID and Family_Member.}
+\item{hped}{A tibble with HLA columns and FAMILY_ID, Family_Member labels.}
 
 \item{collapse}{Separator between genes in collapsed haplotype (default = "~").}
 }
 \value{
-A tibble with FAMILY_ID, Family_Member, haplotype_id, haplotype, and per-locus values.
+A tibble with FAMILY_ID, Family_Member, Segregation, Haplotype
 }
 \description{
-Extracts haplotypes by sorting allele pairs, decoding multi-alleles,
-excluding empty/nulls, and collapsing by gene group within families.
+For each family, identify parental haplotypes, infer inheritance pattern per child,
+and reconstruct child haplotypes directly using inferred segregation (e.g. AC, BD).
 }

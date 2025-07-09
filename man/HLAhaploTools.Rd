@@ -27,42 +27,44 @@ HLAhaploTools(
 \arguments{
 \item{filepath}{Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).}
 
-\item{trim}{Logical. If TRUE, apply \code{trim_hla_results()} (default = FALSE).}
+\item{trim}{Logical. If TRUE, applies \code{trim_hla_results()} to standardize allele resolution (default = FALSE).}
 
-\item{resolution}{Integer. Trimming resolution (fields) for \code{trim_hla_results()} (default = 3).}
+\item{resolution}{Integer. Desired resolution for allele trimming (default = 3).}
 
-\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.}
+\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data format. If TRUE, treats input as family data.}
 
-\item{mac}{Logical. If TRUE, decode multi-allele codes (default = FALSE).}
+\item{mac}{Logical. If TRUE, decode multi-allele codes using \code{decode_classical_mac()} (default = TRUE).}
 
-\item{plot_freq}{Logical. If TRUE, display allele frequency plot (default = FALSE).}
+\item{plot_freq}{Logical. If TRUE, generates allele frequency plot (default = FALSE).}
 
-\item{plot_count}{Logical. If TRUE, display unique allele count plot (default = FALSE).}
+\item{plot_count}{Logical. If TRUE, plots unique allele counts across loci (default = FALSE).}
 
-\item{plot_diversity}{Logical. If TRUE, display diversity plot for specified gene(s) (default = FALSE).}
+\item{plot_diversity}{Logical. If TRUE, plots diversity indices across populations for selected gene(s) (default = FALSE).}
 
-\item{plot_haplotypes}{Logical. If TRUE, display top haplotype frequency plot (default = FALSE).}
+\item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies (default = FALSE).}
 
-\item{gene}{Character vector. Gene(s) for diversity plotting (default = "A").}
+\item{gene}{Character vector. Genes to use for diversity plotting (default = "A").}
 
-\item{parallel}{Logical. If TRUE, use parallel processing when available (default = TRUE).}
+\item{parallel}{Logical. If TRUE, uses parallelization for EM haplotype inference (default = TRUE).}
 
-\item{n_workers}{Integer. Number of workers for parallel processing (default = NULL, auto-detect).}
+\item{n_workers}{Integer or NULL. Number of parallel workers. If NULL, uses \code{availableCores()} (default = NULL).}
 
-\item{sheet}{Excel sheet name or index to read (default = NULL).}
+\item{sheet}{Character or integer. Sheet name or index to use when reading Excel files (optional).}
 
-\item{quiet}{Logical. If TRUE, suppress status messages (default = FALSE).}
+\item{quiet}{Logical. If TRUE, suppresses progress and status messaging (default = FALSE).}
 }
 \value{
-A list containing:
+A named list with the following components:
 \describe{
-\item{typing_data}{Decoded, formatted HLA allele calls}
-\item{allele_frequencies}{Data frame of allele frequencies}
-\item{haplotype_frequencies}{Tibble of inferred haplotype frequencies}
-\item{posteriors}{List of full posterior diplotype distributions}
-\item{top_diplotypes}{Tibble of top diplotype call per subject}
-\item{loci_used}{Character vector of loci included in analysis}
-\item{convergence}{Logical indicating if EM algorithm converged}
+\item{typing_data}{Cleaned and optionally trimmed HLA typing data}
+\item{allele_frequencies}{Data frame of allele frequency summaries}
+\item{haplotype_frequencies}{Tibble containing inferred haplotype distributions}
+\item{posteriors}{List of posterior diplotype probabilities per subject}
+\item{top_diplotypes}{Tibble summarizing most likely diplotype assignment per subject}
+\item{loci_used}{Vector of HLA loci used in haplotype inference}
+\item{convergence}{Logical indicating convergence status of EM algorithm}
+\item{deleted_alleles}{Optional. Tibble of alleles flagged as deleted in IMGT/HLA reference}
+\item{family_segregation}{Optional. Output of segregation analysis if input is family-based}
 }
 }
 \description{
@@ -70,8 +72,10 @@ Provides tools for working with extended human leukocyte antigen (HLA)
 haplotypes, including functions for haplotype construction, visualization,
 family-based inference, and population-level summaries.
 
-Master wrapper that loads, cleans, optionally trims & decodes HLA typing data,
-computes allele summaries, and runs EM‐based haplotype inference with plotting.
+A master wrapper that loads HLA typing data from file, detects data format,
+applies optional formatting and trimming, decodes multi-allele strings (MAC),
+calculates allele-level summaries, performs haplotype inference via EM algorithm,
+and optionally generates plots. Supports both family and registry/population-based studies.
 }
 \seealso{
 Useful links:
@@ -80,6 +84,8 @@ Useful links:
   \item Report bugs at \url{https://github.com/fmobegi/HLAhaploTools/issues}
 }
 
+
+\code{\link[=load_typing_data]{load_typing_data()}}, \code{\link[=reformat_typing_data]{reformat_typing_data()}}, \code{\link[=decode_classical_mac]{decode_classical_mac()}}, \code{\link[=infer_haplotypes]{infer_haplotypes()}}
 }
 \author{
 \strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au}

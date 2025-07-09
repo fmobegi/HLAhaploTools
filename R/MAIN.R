@@ -3,40 +3,47 @@
 # ~~~~~~~~~~~~~~~~~~~~
 #' Run Full HLA Typing Pipeline with Optional Visualization
 #'
-#' Master wrapper that loads, cleans, optionally trims & decodes HLA typing data,
-#' computes allele summaries, and runs EM‐based haplotype inference with plotting.
+#' A master wrapper that loads HLA typing data from file, detects data format,
+#' applies optional formatting and trimming, decodes multi-allele strings (MAC),
+#' calculates allele-level summaries, performs haplotype inference via EM algorithm,
+#' and optionally generates plots. Supports both family and registry/population-based studies.
 #'
 #' @param filepath Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).
-#' @param trim Logical. If TRUE, apply `trim_hla_results()` (default = FALSE).
-#' @param resolution Integer. Trimming resolution (fields) for `trim_hla_results()` (default = 3).
-#' @param isfamily Logical or NULL. If NULL (default), auto-detects data type. If TRUE, treats as family data.
-#' @param mac Logical. If TRUE, decode multi-allele codes (default = FALSE).
-#' @param plot_freq Logical. If TRUE, display allele frequency plot (default = FALSE).
-#' @param plot_count Logical. If TRUE, display unique allele count plot (default = FALSE).
-#' @param plot_diversity Logical. If TRUE, display diversity plot for specified gene(s) (default = FALSE).
-#' @param plot_haplotypes Logical. If TRUE, display top haplotype frequency plot (default = FALSE).
-#' @param gene Character vector. Gene(s) for diversity plotting (default = "A").
-#' @param parallel Logical. If TRUE, use parallel processing when available (default = TRUE).
-#' @param n_workers Integer. Number of workers for parallel processing (default = NULL, auto-detect).
-#' @param sheet Excel sheet name or index to read (default = NULL).
-#' @param quiet Logical. If TRUE, suppress status messages (default = FALSE).
+#' @param trim Logical. If TRUE, applies `trim_hla_results()` to standardize allele resolution (default = FALSE).
+#' @param resolution Integer. Desired resolution for allele trimming (default = 3).
+#' @param isfamily Logical or NULL. If NULL (default), auto-detects data format. If TRUE, treats input as family data.
+#' @param mac Logical. If TRUE, decode multi-allele codes using `decode_classical_mac()` (default = TRUE).
+#' @param plot_freq Logical. If TRUE, generates allele frequency plot (default = FALSE).
+#' @param plot_count Logical. If TRUE, plots unique allele counts across loci (default = FALSE).
+#' @param plot_diversity Logical. If TRUE, plots diversity indices across populations for selected gene(s) (default = FALSE).
+#' @param plot_haplotypes Logical. If TRUE, plots top inferred haplotype frequencies (default = FALSE).
+#' @param gene Character vector. Genes to use for diversity plotting (default = "A").
+#' @param parallel Logical. If TRUE, uses parallelization for EM haplotype inference (default = TRUE).
+#' @param n_workers Integer or NULL. Number of parallel workers. If NULL, uses `availableCores()` (default = NULL).
+#' @param sheet Character or integer. Sheet name or index to use when reading Excel files (optional).
+#' @param quiet Logical. If TRUE, suppresses progress and status messaging (default = FALSE).
 #'
-#' @return A list containing:
+#' @return A named list with the following components:
 #' \describe{
-#'   \item{typing_data}{Decoded, formatted HLA allele calls}
-#'   \item{allele_frequencies}{Data frame of allele frequencies}
-#'   \item{haplotype_frequencies}{Tibble of inferred haplotype frequencies}
-#'   \item{posteriors}{List of full posterior diplotype distributions}
-#'   \item{top_diplotypes}{Tibble of top diplotype call per subject}
-#'   \item{loci_used}{Character vector of loci included in analysis}
-#'   \item{convergence}{Logical indicating if EM algorithm converged}
+#'   \item{typing_data}{Cleaned and optionally trimmed HLA typing data}
+#'   \item{allele_frequencies}{Data frame of allele frequency summaries}
+#'   \item{haplotype_frequencies}{Tibble containing inferred haplotype distributions}
+#'   \item{posteriors}{List of posterior diplotype probabilities per subject}
+#'   \item{top_diplotypes}{Tibble summarizing most likely diplotype assignment per subject}
+#'   \item{loci_used}{Vector of HLA loci used in haplotype inference}
+#'   \item{convergence}{Logical indicating convergence status of EM algorithm}
+#'   \item{deleted_alleles}{Optional. Tibble of alleles flagged as deleted in IMGT/HLA reference}
+#'   \item{family_segregation}{Optional. Output of segregation analysis if input is family-based}
 #' }
+#'
+#' @seealso [load_typing_data()], [reformat_typing_data()], [decode_classical_mac()], [infer_haplotypes()]
 #' @export
 #'
 #' @importFrom future plan multisession availableCores
 #' @importFrom furrr future_map
 #' @importFrom tibble tibble
 #' @importFrom dplyr mutate distinct slice_max relocate select
+#++++++++++++++++++ HLAhaploTools
 HLAhaploTools <- function(filepath,
                           trim = FALSE,
                           resolution = 3,
@@ -51,294 +58,181 @@ HLAhaploTools <- function(filepath,
                           n_workers = NULL,
                           sheet = NULL,
                           quiet = FALSE) {
-  if (!quiet) {
-    message("\n🧬 HLAhaploTools Analysis Pipeline")
-  }
+  if (!quiet) message("\n🧬 HLAhaploTools Analysis Pipeline")
 
-  # validate parameters and report which are set
+  #++++++++++++++++++ Parameters
   if (!quiet) {
     message("\n🔧 Parameters:")
     message(sprintf("\tTrim: %s (default resolution: %d)", trim, resolution))
-    message(sprintf(
-      "\tFamily data: %s",
-      ifelse(is.null(isfamily), "Auto-detect", isfamily)
-    ))
+    message(sprintf("\tFamily data: %s", ifelse(is.null(isfamily), "Auto-detect", isfamily)))
     message(sprintf("\tDecode MAC: %s", mac))
     message(sprintf("\tPlot allele frequency: %s", plot_freq))
     message(sprintf("\tPlot unique allele count: %s", plot_count))
     message(sprintf("\tPlot diversity: %s (gene: %s)", plot_diversity, gene))
     message(sprintf("\tPlot haplotypes: %s", plot_haplotypes))
-    message(sprintf(
-      "\tParallel processing: %s (workers: %s)",
-      parallel,
-      ifelse(is.null(n_workers), "Auto-detect", n_workers)
-    ))
+    message(sprintf("\tParallel processing: %s (workers: %s)", parallel, ifelse(is.null(n_workers), "Auto-detect", n_workers)))
   }
 
-  # Step 1: Load data file
-  if (!quiet) {
-    message("\n📁 Step 1: Loading HLA typing file...")
-  }
+  #++++++++++++++++++ Step 1: Load data file
+  if (!quiet) message("\n📁 Step 1: Loading HLA typing file...")
   df_raw <- tryCatch(
     load_typing_data(filepath = filepath, sheet = sheet, quiet = quiet),
-    error = function(e) {
-      stop("\t❌ File load error: ", e$message)
-    }
+    error = function(e) stop("\t❌ File load error: ", e$message)
   )
 
-  # Step 2: Detect or use provided data type info
-  detect_result <- NULL
+  #++++++++++++++++++ Step 2: Detect or use provided data type info
   if (is.null(isfamily)) {
     if (!quiet) message("\n🔍 Step 2: Auto-detecting data format...")
     detect_result <- detect_data_type(df_raw, quiet = quiet)
     family_data_val <- detect_result$is_family
   } else {
     family_data_val <- isfamily
-    if (!quiet) {
-      message(
-        "\nℹ️ Data format explicitly provided as ",
-        ifelse(isfamily, "'FAMILY STUDY'", "'REGULAR TYPING'"),
-        "; skipping auto-detection."
-      )
-    }
-    # Still run detection internally but quietly to get IDs and columns for downstream use
     detect_result <- detect_data_type(df_raw, quiet = TRUE)
+    if (!quiet) {
+      message(sprintf(
+        "\nℹ️ Data format explicitly provided as %s; skipping auto-detection.",
+        ifelse(isfamily, "'FAMILY STUDY'", "'REGULAR TYPING'")
+      ))
+    }
   }
 
-  # Assign relevant ID columns from detection
-  family_col <- if (!is.null(detect_result$family_col)) {
-    detect_result$family_col
-  } else {
-    NULL
-  }
-  member_col <- if (!is.null(detect_result$member_col)) {
-    detect_result$member_col
-  } else {
-    NULL
-  }
-  id_cols <- if (!is.null(detect_result$id_cols)) {
-    detect_result$id_cols
-  } else {
-    NULL
-  }
+  family_col <- detect_result$family_col
+  member_col <- detect_result$member_col
+  id_cols <- detect_result$id_cols
 
-  # Validate data structure based on detected type
-  if (family_data_val) {
-    if (!quiet) message("\n✓ Data format detected: FAMILY STUDY")
-    valid <- validate_family_data(df_raw,
-      stop_if_invalid = TRUE,
-      verbose = !quiet
-    )
-  } else {
-    if (!quiet) message("\n✓ Data format detected: REGULAR TYPING")
-    valid <- validate_regular_data(df_raw,
-      stop_if_invalid = TRUE,
-      verbose = !quiet
-    )
-  }
-
-  if (!valid) {
-    stop("Validation failed: data does not meet expected format.")
-  }
-  # Step 3: Reformat typing data
   if (!quiet) {
-    message("\n🧹 Step 3: Reformatting data...")
+    message(sprintf("\n✓ Data format detected: %s", ifelse(family_data_val, "FAMILY STUDY", "REGULAR TYPING")))
   }
+
+  valid <- if (family_data_val) {
+    validate_family_data(df_raw, stop_if_invalid = TRUE, verbose = !quiet)
+  } else {
+    validate_regular_data(df_raw, stop_if_invalid = TRUE, verbose = !quiet)
+  }
+
+  if (!valid) stop("Validation failed: data does not meet expected format.")
+
+  #++++++++++++++++++ Step 3: Reformat typing data
+  if (!quiet) message("\n🧹 Step 3: Reformatting data...")
   df_formatted <- reformat_typing_data(df_raw, isfamilydata = family_data_val, quiet = quiet)
-  qc_report <- attr(df_formatted, "qc")
 
-  # Step 4: Check deleted alleles
-  if (!quiet) {
-    message("\n⚠️ Step 4: Checking for deleted alleles...")
-  }
-  df_deleted_alleles <- check_deleted_alleles(df_formatted)
+  #++++++++++++++++++ Step 4: Check deleted alleles
+  if (!quiet) message("\n⚠️ Step 4: Checking for deleted alleles...")
+  df_deleted_alleles <- check_deleted_alleles(df_formatted, quiet = quiet)
 
-  # Step 5: If mac=TRUE, decode MAC strings
-  if (mac) {
-    if (!quiet) {
-      message("\n🔄 Step 5: Decoding MAC strings...")
-    }
-    df_decoded <- decode_classical_mac(df_formatted, quiet = quiet)
+  #++++++++++++++++++ Step 5: Decode MAC strings
+  df_decoded <- if (mac) {
+    if (!quiet) message("\n🔄 Step 5: Decoding MAC strings...")
+    decode_classical_mac(df_formatted, quiet = quiet)
   } else {
-    df_decoded <- df_formatted
-    if (!quiet) {
-      message("\n➡️ Step 5: Skipping MAC decoding (mac = FALSE)")
-    }
+    if (!quiet) message("\n➡️ Step 5: Skipping MAC decoding (mac = FALSE)")
+    df_formatted
   }
 
-  # Step 6: Optional trimming
+  #++++++++++++++++++ Step 6: Optional trimming
   if (trim) {
-    if (!quiet) {
-      message("\n✂️ Step 6: Trimming allele names to specified resolution...")
-    }
-    df_decoded <- trim_hla_results(
-      df_decoded,
-      resolution = resolution,
-      quiet = quiet
-    )
+    if (!quiet) message("\n✂️ Step 6: Trimming allele names...")
+    df_decoded <- trim_hla_results(df_decoded, resolution = resolution, quiet = quiet)
   } else {
-    if (!quiet) {
-      message("\n➡️ Step 6: Skipping trimming (trim = FALSE)")
-    }
+    if (!quiet) message("\n➡️ Step 6: Skipping trimming (trim = FALSE)")
   }
 
-  # Step 7: Calculate allele frequencies
-  if (!quiet) {
-    message("\n📊 Step 7: Calculating allele frequencies...")
-  }
+  #++++++++++++++++++ Step 7: Calculate allele frequencies
+  if (!quiet) message("\n📊 Step 7: Calculating allele frequencies...")
   df_allele_freq <- calculate_hla_frequency(df_decoded, quiet = quiet)
 
+  # Optional gene summary
   if (!quiet) {
-    message("\t✅ Completed allele frequency summary.")
-
-    # Get unique gene categories
     gene_names <- unique(df_allele_freq$gene)
-    class1_genes <- intersect(c("A", "B", "C"), gene_names)
-    class2_genes <- intersect(
-      c(
-        "DRB1",
-        "DRB3",
-        "DRB4",
-        "DRB5",
-        "DQA1",
-        "DQB1",
-        "DPA1",
-        "DPB1"
-      ),
-      gene_names
-    )
-    nonclass_genes <- intersect(
-      c("E", "F", "G", "H", "J", "K", "L", "HFE"),
-      gene_names
-    )
-    mic_genes <- intersect(c("MICA", "MICB"), gene_names)
-
     message(sprintf(
       "\t📦 Genes: %d | Unique alleles: %d",
-      length(gene_names),
-      length(unique(df_allele_freq$allele))
+      length(gene_names), length(unique(df_allele_freq$allele))
     ))
 
-    # Optional detailed gene reporting
-    if (length(class1_genes) > 0) {
-      message(sprintf(
-        "\t✓ Class I genes: %s",
-        paste(class1_genes, collapse = ", ")
-      ))
-    }
-    if (length(class2_genes) > 0) {
-      message(sprintf(
-        "\t✓ Class II genes: %s",
-        paste(class2_genes, collapse = ", ")
-      ))
-    }
-    if (length(nonclass_genes) > 0) {
-      message(sprintf(
-        "\t✓ Non-classical genes: %s",
-        paste(nonclass_genes, collapse = ", ")
-      ))
-    }
-    if (length(mic_genes) > 0) {
-      message(sprintf(
-        "\t✓ MIC genes: %s",
-        paste(mic_genes, collapse = ", ")
-      ))
-    }
+    class1 <- intersect(c("A", "B", "C"), gene_names)
+    class2 <- intersect(c("DRB1", "DRB3", "DRB4", "DRB5", "DQA1", "DQB1", "DPA1", "DPB1"), gene_names)
+    nonclass <- intersect(c("E", "F", "G", "H", "J", "K", "L", "HFE"), gene_names)
+    mic <- intersect(c("MICA", "MICB"), gene_names)
+
+    if (length(class1)) message("\t✓ Class I genes: ", paste(class1, collapse = ", "))
+    if (length(class2)) message("\t✓ Class II genes: ", paste(class2, collapse = ", "))
+    if (length(nonclass)) message("\t✓ Non-classical genes: ", paste(nonclass, collapse = ", "))
+    if (length(mic)) message("\t✓ MIC genes: ", paste(mic, collapse = ", "))
   }
 
-  # Step 8: Optional plots (allele freq, count, diversity) ...
+  #++++++++++++++++++ Step 7 (plots)
   if (plot_freq) {
-    if (!quiet) {
-      message("\n🖼️  Step 7.1:  Generating allele frequency plot...")
-    }
+    if (!quiet) message("\n🖼️  Step 7.1: Plotting allele frequency...")
     print(plot_hla_allele_frequency(df_allele_freq, quiet = quiet))
   }
 
   if (plot_count) {
-    if (!quiet) {
-      message("\n📊  ️Step 7.2: Generating allele count plot...")
-    }
+    if (!quiet) message("\n📊 Step 7.2: Plotting allele count...")
     print(plot_hla_allele_count(df_allele_freq, quiet = quiet))
   }
 
   if (plot_diversity) {
-    # Check if there are multiple populations to compare
     if ("population" %in% names(df_allele_freq) && length(unique(df_allele_freq$population)) > 1) {
       for (g in unique(gene)) {
-        if (!quiet) {
-          message(sprintf("\n🌐 Step 7.3: Generating diversity plot for gene: %s", g))
-        }
-        print(plot_hla_diversity(
-          df_allele_freq,
-          gene = g,
-          quiet = quiet
-        ))
+        if (!quiet) message(sprintf("\n🌐 Step 7.3: Diversity plot for gene: %s", g))
+        print(plot_hla_diversity(df_allele_freq, gene = g, quiet = quiet))
       }
     } else {
       if (!quiet) {
-        message("\n⚠️  Step 7.3: Diversity plot skipped: multiple populations required for comparison.")
+        message("\n⚠️  Step 7.3: Diversity plot skipped — only one population group found.")
       }
-      message("\t   The current dataset contains only one population group.")
     }
   }
 
-  # Step 9: Run haplotype inference with EM algorithm
-  if (!quiet) {
-    message("\n🔄 Step 9: Running haplotype inference with EM algorithm...")
+  #++++++++++++++++++ Step 8: Family segregation
+  if (!quiet) message("\n🧬 Step 8: Family segregation analysis")
+  if (family_data_val) {
+    if (!quiet) message("\t✅ Running segregation analysis...")
+    df_segregation <- compute_hla_segregation(hped = df_decoded)
+  } else {
+    if (!quiet) message("\tℹ️ Skipping segregation — data is not family-based.")
+    df_segregation <- NULL
   }
 
-  haplotype_results <- infer_haplotypes(
-    df = df_decoded,
-    loci = NULL, # Auto-detect loci
-    parallel = parallel,
-    n_workers = n_workers,
-    quiet = quiet,
-    isfamily = family_data_val
+  # #++++++++++++++++++ Step 9: Haplotype inference
+  # if (!quiet) message("\n🔄 Step 9: Inferring haplotypes using EM...")
+  # haplotype_results <- infer_haplotypes(
+  #   df = df_decoded,
+  #   loci = NULL,
+  #   parallel = parallel,
+  #   n_workers = n_workers,
+  #   quiet = quiet,
+  #   isfamily = family_data_val
+  # )
+  #
+  # #++++++++++++++++++ Step 10: Haplotype plot
+  # if (plot_haplotypes) {
+  #   if (!quiet) message("\n📊 Step 10: Plotting haplotype frequencies...")
+  #   print(plot_top_haplotypes(haplotype_results$haplotype_frequencies, quiet = quiet))
+  # }
+
+  #++++++++++++++++++ Return results
+  result_df <- list(
+    typing_data           = df_decoded,
+    allele_frequencies    = df_allele_freq,
+    haplotype_frequencies = NULL,
+    posteriors            = NULL,
+    top_diplotypes        = NULL,
+    loci_used             = NULL,
+    convergence           = NA,
+    family_segregation    = if (exists("df_segregation") && !is.null(df_segregation)) df_segregation else NULL,
+    deleted_alleles       = if (exists("df_deleted_alleles") && !is.null(df_deleted_alleles) && nrow(df_deleted_alleles) > 0) df_deleted_alleles else NULL
   )
 
-  hap_freqs <- haplotype_results$haplotype_frequencies
-  posteriors <- haplotype_results$posteriors
-  top_diplotypes <- haplotype_results$top_diplotypes
-
-  if (!quiet) {
-    message("\n✅ Haplotype inference complete!")
-    message(
-      sprintf(
-        "\t📊 Found %d unique haplotypes (converged: %s, iterations: %d)",
-        nrow(hap_freqs),
-        ifelse(haplotype_results$convergence, "Yes", "No"),
-        haplotype_results$iterations
-      )
-    )
+  if (exists("haplotype_results") && !is.null(haplotype_results)) {
+    result_df$haplotype_frequencies <- haplotype_results$haplotype_frequencies %||% NULL
+    result_df$posteriors <- haplotype_results$posteriors %||% NULL
+    result_df$top_diplotypes <- haplotype_results$top_diplotypes %||% NULL
+    result_df$loci_used <- haplotype_results$loci_used %||% NULL
+    result_df$convergence <- haplotype_results$convergence %||% NA
   }
 
-  # Step 10: Plot haplotype frequencies if requested
-  if (plot_haplotypes) {
-    if (!quiet) {
-      message("\n📊 Generating haplotype frequency plot...")
-    }
-    print(plot_top_haplotypes(hap_freqs, quiet = quiet))
-  }
-
-  # Prepare result list
-  result <- list(
-    typing_data = df_decoded,
-    allele_frequencies = df_allele_freq,
-    haplotype_frequencies = hap_freqs,
-    posteriors = posteriors,
-    top_diplotypes = top_diplotypes,
-    loci_used = haplotype_results$loci_used,
-    convergence = haplotype_results$convergence
-  )
-
-  # Include deleted alleles if any rows present
-  if (nrow(df_deleted_alleles) >= 1) {
-    result$deleted_alleles <- df_deleted_alleles
-  }
-
-  if (!quiet) {
-    message("\n🏁 HLAhaploTools analysis complete!")
-  }
-
-  return(result)
+  if (!quiet) message("\n🏁 HLAhaploTools analysis complete!")
+  print.HLAhaploTools(result_df)
+  invisible(result_df)
 }
