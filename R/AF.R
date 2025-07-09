@@ -4,7 +4,7 @@
 #' Calculate HLA Allele Frequencies
 #'
 #' Computes allele frequencies for all HLA genes in a tidy dataset with `_1` and `_2` allele columns.
-#' If no population column exists, a default "FSH_Immuno" value is used.
+#' If no population column exists, a default "POP" value is used.
 #' Handles multi-allele strings (e.g., "A*01:01:01:01/A*01:01:01:02") by splitting before counting.
 #'
 #' @param hped A data frame or tibble with HLA allele columns.
@@ -23,11 +23,13 @@
 #' # Plot the frequencies
 #' plot_hla_allele_frequency(data)
 #' }
+#'
 #' @importFrom dplyr arrange desc bind_rows
 #' @importFrom tibble tibble as_tibble
+#'
 #' @export
 calculate_hla_frequency <- function(hped, quiet = FALSE) {
-  if (!quiet) message("\t📊 Calculating HLA allele frequencies...")
+  if (!quiet) message("\t📊 Started Calculating HLA allele frequencies...")
 
   if (!is.data.frame(hped)) {
     stop("\t❌ Input must be a data frame or tibble.")
@@ -46,9 +48,9 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
   if (!"Population" %in% colnames(hped)) {
     if (!quiet) {
-      message("\tℹ️ No population column found — assigning default 'FSH_Immuno'.")
+      message("\tℹ️ No population column found — assigning default 'POP'.")
     }
-    hped$Population <- "FSH_Immuno"
+    hped$Population <- "POP"
   }
 
   allele_cols <- grep("_[12]$", names(hped), value = TRUE)
@@ -108,7 +110,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
         if (!quiet) {
           message(sprintf(
-            "\t✅ Gene %s: found %d unique alleles from %d total.",
+            "\t✅  %s has %d unique alleles from %d total.",
             gene, length(counts), length(alleles_clean)
           ))
         }
@@ -116,7 +118,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
         return(result)
       },
       error = function(e) {
-        warning(sprintf("\t❌ Skipping gene '%s' due to error: %s", gene, e$message))
+        warning(sprintf("\t❌ Skipping '%s' due to error: %s", gene, e$message))
         NULL
       }
     )
@@ -140,7 +142,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
   if (!quiet) {
     message(sprintf(
-      "\t🏁 Completed frequency analysis: %d alleles across %d genes.",
+      "\t🏁 Completed frequency analysis: %d alleles across %d loci.",
       nrow(df_freq), length(unique(df_freq$gene))
     ))
   }
@@ -163,11 +165,13 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
 #' @return A ggplot object that can be printed or composed with patchwork.
-#' @importFrom ggplot2 ggplot aes geom_bar geom_text scale_fill_manual theme_minimal theme element_text
+#'
+#' @import ggplot2
 #' @importFrom dplyr group_by mutate summarise arrange desc filter case_when
 #' @importFrom tidyr replace_na
 #' @importFrom patchwork plot_layout plot_annotation
 #' @importFrom ggh4x facet_nested
+#'
 #' @export
 plot_hla_allele_frequency <- function(freq_data,
                                       min_freq = 0.05,
@@ -387,6 +391,10 @@ plot_hla_allele_frequency <- function(freq_data,
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
 #' @return A ggplot object that can be further customized or printed.
+#'
+#' @import ggplot2
+#' @import dplyr
+
 #' @export
 plot_hla_allele_count <- function(freq_data,
                                   min_count = 0,
@@ -534,6 +542,11 @@ plot_hla_allele_count <- function(freq_data,
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
 #' @return A ggplot object that can be further customized or printed.
+#'
+#' @import ggplot2
+#' @importFrom forcats fct_lump_n
+#' @importFrom dplyr group_by mutate summarise arrange desc
+#'
 #' @export
 plot_hla_diversity <- function(freq_data,
                                gene = "A",
@@ -648,50 +661,28 @@ plot_hla_diversity <- function(freq_data,
 create_gene_palette <- function(genes) {
   # Predefined colors for common HLA genes
   hla_colors <- c(
-    "A" = "#E41A1C",
-    # Red
-    "B" = "#377EB8",
-    # Blue
-    "C" = "#4DAF4A",
-    # Green
-    "DRB1" = "#984EA3",
-    # Purple
-    "DRB3" = "#925E93",
-    # Light Purple
-    "DRB4" = "#7F4E83",
-    # Medium Purple
-    "DRB5" = "#6C3E73",
-    # Dark Purple
-    "DQB1" = "#FF7F00",
-    # Orange
-    "DQA1" = "#FFFF33",
-    # Yellow
-    "DPB1" = "#A65628",
-    # Brown
-    "DPA1" = "#F781BF",
-    # Pink
-    "E" = "#999999",
-    # Gray
-    "F" = "#66C2A5",
-    # Teal
-    "G" = "#FC8D62",
-    # Salmon
-    "H" = "#8DA0CB",
-    # Light Blue
-    "J" = "#E78AC3",
-    # Orchid
-    "MICA" = "#A6D854",
-    # Light Green
-    "MICB" = "#FFD92F",
-    # Gold
-    "HFE" = "#B3B3B3",
-    # Silver
-    "DMA" = "#B2DF8A",
-    # Pale Green
-    "DMB" = "#FB9A99",
-    # Pale Red
-    "DOA" = "#CAB2D6",
-    # Lavender
+    "A" = "#E41A1C", # Red
+    "B" = "#377EB8", # Blue
+    "C" = "#4DAF4A", # Green
+    "DRB1" = "#984EA3", # Purple
+    "DRB3" = "#925E93", # Light Purple
+    "DRB4" = "#7F4E83", # Medium Purple
+    "DRB5" = "#6C3E73", # Dark Purple
+    "DQB1" = "#FF7F00", # Orange
+    "DQA1" = "#FFFF33", # Yellow
+    "DPB1" = "#A65628", # Brown
+    "DPA1" = "#F781BF", # Pink
+    "E" = "#999999", # Gray
+    "F" = "#66C2A5", # Teal
+    "G" = "#FC8D62", # Salmon
+    "H" = "#8DA0CB", # Light Blue
+    "J" = "#E78AC3", # Orchid
+    "MICA" = "#A6D854", # Light Green
+    "MICB" = "#FFD92F", # Gold
+    "HFE" = "#B3B3B3", # Silver
+    "DMA" = "#B2DF8A", # Pale Green
+    "DMB" = "#FB9A99", # Pale Red
+    "DOA" = "#CAB2D6", # Lavender
     "DOB" = "#FDBF6F" # Light Orange
   )
 

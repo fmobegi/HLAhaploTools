@@ -19,3 +19,4 @@ Logical indicating if data is valid
 \description{
 Ensures that non-family typing data has proper structure before processing.
 }
+\keyword{internal}

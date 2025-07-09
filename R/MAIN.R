@@ -58,7 +58,7 @@ HLAhaploTools <- function(filepath,
   # validate parameters and report which are set
   if (!quiet) {
     message("\n🔧 Parameters:")
-    message(sprintf("\tTrim: %s (default resolution: %d)", trim, resolution)) #
+    message(sprintf("\tTrim: %s (default resolution: %d)", trim, resolution))
     message(sprintf(
       "\tFamily data: %s",
       ifelse(is.null(isfamily), "Auto-detect", isfamily)
@@ -249,14 +249,14 @@ HLAhaploTools <- function(filepath,
   # Step 8: Optional plots (allele freq, count, diversity) ...
   if (plot_freq) {
     if (!quiet) {
-      message("\n🖼️ Generating allele frequency plot...")
+      message("\n🖼️  Step 7.1:  Generating allele frequency plot...")
     }
     print(plot_hla_allele_frequency(df_allele_freq, quiet = quiet))
   }
 
   if (plot_count) {
     if (!quiet) {
-      message("\n📊 Generating allele count plot...")
+      message("\n📊  ️Step 7.2: Generating allele count plot...")
     }
     print(plot_hla_allele_count(df_allele_freq, quiet = quiet))
   }
@@ -266,7 +266,7 @@ HLAhaploTools <- function(filepath,
     if ("population" %in% names(df_allele_freq) && length(unique(df_allele_freq$population)) > 1) {
       for (g in unique(gene)) {
         if (!quiet) {
-          message(sprintf("\n🌐 Generating diversity plot for gene: %s", g))
+          message(sprintf("\n🌐 Step 7.3: Generating diversity plot for gene: %s", g))
         }
         print(plot_hla_diversity(
           df_allele_freq,
@@ -276,7 +276,7 @@ HLAhaploTools <- function(filepath,
       }
     } else {
       if (!quiet) {
-        message("\n⚠️ Diversity plot skipped: multiple populations required for comparison.")
+        message("\n⚠️  Step 7.3: Diversity plot skipped: multiple populations required for comparison.")
       }
       message("\t   The current dataset contains only one population group.")
     }

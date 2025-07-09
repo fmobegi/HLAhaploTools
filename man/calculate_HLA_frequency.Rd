@@ -31,4 +31,5 @@ freqs <- calculate_hla_frequency(data)
 # Plot the frequencies
 plot_hla_allele_frequency(data)
 }
+
 }

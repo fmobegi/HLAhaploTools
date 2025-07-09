@@ -12,23 +12,24 @@ check_deleted_alleles(
 )
 }
 \arguments{
-\item{df_hla}{A dataframe containing HLA allele typing data}
+\item{df_hla}{A dataframe containing HLA allele typing data.}
 
 \item{deleted_file_path}{Path or URL to the Deleted_alleles.txt file
-(default: IMGT/HLA database URL)}
+(default: IMGT/HLA database URL).}
 
 \item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
-A dataframe containing information about deleted alleles found
+A dataframe containing information about deleted alleles found in the input.
 }
 \description{
 Analyzes a dataframe containing HLA allele designations, checking for
-deleted alleles according to the IMGT/HLA database.
+deleted alleles according to the IMGT/HLA database. Downloads and parses the official
+deleted allele list, then matches any occurrences in the user's data.
 }
 \examples{
 \dontrun{
-# Check dataframe for deleted alleles
 results <- check_deleted_alleles(df_hla)
 }
 }
+\keyword{internal}

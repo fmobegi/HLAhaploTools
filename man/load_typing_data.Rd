@@ -35,4 +35,5 @@ excel_data <- load_typing_data("path/to/hla_data.xlsx", sheet = "Family1")
 # Load silently without messages
 quiet_load <- load_typing_data("path/to/data.tsv", quiet = TRUE)
 }
+
 }

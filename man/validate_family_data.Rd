@@ -7,15 +7,18 @@
 validate_family_data(df, stop_if_invalid = TRUE, verbose = TRUE)
 }
 \arguments{
-\item{df}{A data frame with HLA typing data}
+\item{df}{A data frame or tibble containing HLA typing data.}
 
-\item{stop_if_invalid}{Logical. If TRUE, stops execution if data is invalid}
+\item{stop_if_invalid}{Logical. If TRUE, stops execution if data is not valid family format.}
 
-\item{verbose}{Logical. If TRUE, prints detailed validation information}
+\item{verbose}{Logical. If TRUE, prints detailed validation output.}
 }
 \value{
-Logical indicating if data is valid
+Logical \code{TRUE} if valid family structure is detected, \code{FALSE} otherwise.
 }
 \description{
-Ensures that family data has proper structure before processing.
+Checks whether the input dataset reflects a valid family study format and
+provides structural insights. This includes detecting father, mother, and child roles
+based on the \code{Family_Member} column and reporting completeness of family trios.
 }
+\keyword{internal}

@@ -24,9 +24,12 @@
 #' # Load silently without messages
 #' quiet_load <- load_typing_data("path/to/data.tsv", quiet = TRUE)
 #' }
+#'
 #' @importFrom readr read_csv read_tsv cols
 #' @importFrom readxl read_excel
 #' @importFrom tibble as_tibble
+#' @importFrom tools file_ext
+#'
 #' @export
 load_typing_data <- function(filepath,
                              sheet = NULL,
@@ -109,8 +112,10 @@ load_typing_data <- function(filepath,
     )
   )
 
-  tibble::as_tibble(df)
+  df <- tibble::as_tibble(df)
+  df
 }
+
 
 # ~~~~~~~~~~~~~~~~
 # detect_data_type
@@ -169,7 +174,7 @@ detect_data_type <- function(df, quiet = FALSE) {
   }
 
   # Return metadata list
-  return(list(
+  list(
     is_family = is_family,
     family_col = if (is_family) family_col else NULL,
     member_col = if (is_family) member_col else NULL,
@@ -180,8 +185,9 @@ detect_data_type <- function(df, quiet = FALSE) {
       # Use all detected sample ID columns, or fallback to family_col if available
       unique(na.omit(c(sample_id_cols, family_col)))
     }
-  ))
+  )
 }
+
 
 # ~~~~~~~~~~~~~~~~~~~~
 # reformat_typing_data
@@ -209,10 +215,11 @@ detect_data_type <- function(df, quiet = FALSE) {
 #' qc_report <- attr(formatted, "qc")
 #' }
 #'
-#' @export
 #' @importFrom janitor clean_names
 #' @importFrom dplyr across mutate arrange
 #' @importFrom forcats fct_relevel
+#'
+#' @export
 reformat_typing_data <- function(df,
                                  isfamilydata = NULL,
                                  quiet = FALSE) {
@@ -280,7 +287,7 @@ reformat_typing_data <- function(df,
     message("\t✅ Formatting complete. HLA data successfully processed.")
   }
 
-  return(df)
+  df
 }
 
 
@@ -296,6 +303,7 @@ reformat_typing_data <- function(df,
 #'
 #' @return A tibble with cleaned column names
 #' @keywords internal
+#'
 #' @importFrom janitor clean_names
 #' @importFrom dplyr mutate across
 clean_column_names <- function(df, quiet = FALSE) {
@@ -473,8 +481,10 @@ clean_column_names <- function(df, quiet = FALSE) {
     }
   }
 
-  return(df)
+  df
 }
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
 # standardize_allele_format
 # ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -592,8 +602,10 @@ standardize_allele_format <- function(df, quiet = FALSE) {
     )
   }
 
-  return(df)
+  df
 }
+
+
 # ~~~~~~~~~~~~~~~~~~~~
 # fill_missing_alleles
 # ~~~~~~~~~~~~~~~~~~~~
@@ -791,6 +803,7 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
   list(cleaned = cleaned_df, qc = qc_df)
 }
 
+
 # ~~~~~~~~~~~~~~~~~
 # organize_and_sort
 # ~~~~~~~~~~~~~~~~~
@@ -807,7 +820,6 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
 #' @return A sorted and organized tibble
 #' @keywords internal
 #' @importFrom dplyr arrange
-#' @importFrom forcats fct_relevel
 organize_and_sort <- function(df,
                               isfamilydata = TRUE,
                               quiet = FALSE) {
@@ -958,8 +970,10 @@ organize_and_sort <- function(df,
     }
   }
 
-  return(df)
+  df
 }
+
+
 # ~~~~~~~~~~~~~~~~~~~~
 # decode_classical_mac
 # ~~~~~~~~~~~~~~~~~~~~
@@ -1055,8 +1069,10 @@ decode_classical_mac <- function(df,
     }
   }
 
-  return(df)
+  df
 }
+
+
 # ~~~~~~~~~~~~~~~~
 # trim_hla_results
 # ~~~~~~~~~~~~~~~~
@@ -1074,6 +1090,7 @@ decode_classical_mac <- function(df,
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
 #' @return A tibble with trimmed allele values.
+#'
 #' @examples
 #' \dontrun{
 #' # Load and trim alleles to 2-field resolution
@@ -1081,9 +1098,10 @@ decode_classical_mac <- function(df,
 #'   reformat_typing_data() %>%
 #'   trim_hla_results(resolution = 2)
 #' }
-#' @export
 #' @importFrom HLAtools multiAlleleTrim
 #' @importFrom tibble as_tibble
+#'
+#' @export
 trim_hla_results <- function(df,
                              resolution = 3,
                              append = TRUE,
@@ -1191,89 +1209,78 @@ trim_hla_results <- function(df,
       message(sprintf("\t⚠️ %d alleles could not be trimmed properly.", fail_count))
     }
   }
-
-  return(tibble::as_tibble(df))
+  df <- tibble::as_tibble(df)
+  df
 }
-# ~~~~~~~~~~~~~~~~~~~~
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~
 # validate_family_data
-# ~~~~~~~~~~~~~~~~~~~~
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~
 #' Validate Family Data Structure
 #'
-#' Ensures that family data has proper structure before processing.
+#' Checks whether the input dataset reflects a valid family study format and
+#' provides structural insights. This includes detecting father, mother, and child roles
+#' based on the `Family_Member` column and reporting completeness of family trios.
 #'
-#' @param df A data frame with HLA typing data
-#' @param stop_if_invalid Logical. If TRUE, stops execution if data is invalid
-#' @param verbose Logical. If TRUE, prints detailed validation information
+#' @param df A data frame or tibble containing HLA typing data.
+#' @param stop_if_invalid Logical. If TRUE, stops execution if data is not valid family format.
+#' @param verbose Logical. If TRUE, prints detailed validation output.
 #'
-#' @return Logical indicating if data is valid
-#' @export
+#' @return Logical `TRUE` if valid family structure is detected, `FALSE` otherwise.
+#' @keywords internal
 validate_family_data <- function(df,
                                  stop_if_invalid = TRUE,
                                  verbose = TRUE) {
-  # First check if this is family data
-  detect <- detect_data_type(df_raw, quiet = quiet)
+  # Detect data type using quiet mode
+  detect <- detect_data_type(df, quiet = !verbose)
   is_family <- detect$is_family
-
 
   if (!is_family) {
     if (stop_if_invalid) {
       stop(
-        "\n\t❌ Error: Data does not appear to be in family study format. ",
-        "Use other functions for processing regular typing data."
+        "\n\t❌ Error: Data does not appear to be in family study format.\n",
+        "\t   Use other functions for registry or population data."
       )
     }
     return(FALSE)
   }
 
-
-  # Additional validations for family data structure
   if (verbose) {
     message("\n\t🔍 Validating family structure...")
 
-    # Get column names for family data
     family_col <- "FAMILY_ID"
     member_col <- "Family_Member"
 
-    # Count family structure
+    # Summary counts
     n_families <- length(unique(df[[family_col]]))
     n_fathers <- sum(df[[member_col]] %in% c("F", "Father"), na.rm = TRUE)
     n_mothers <- sum(df[[member_col]] %in% c("M", "Mother"), na.rm = TRUE)
     n_children <- sum(grepl("^C\\d+$|Child", df[[member_col]]), na.rm = TRUE)
 
-    message(
-      sprintf(
-        "\t   Found %d families with %d fathers, %d mothers, %d children",
-        n_families,
-        n_fathers,
-        n_mothers,
-        n_children
-      )
-    )
+    message(sprintf(
+      "\t   Found %d families with %d fathers, %d mothers, %d children.",
+      n_families, n_fathers, n_mothers, n_children
+    ))
 
-    # Check family completeness
-    complete_families <- 0
-    for (fam in unique(df[[family_col]])) {
+    # Trio completeness check
+    complete_families <- sum(sapply(unique(df[[family_col]]), function(fam) {
       fam_data <- df[df[[family_col]] == fam, ]
       has_father <- any(fam_data[[member_col]] %in% c("F", "Father"))
       has_mother <- any(fam_data[[member_col]] %in% c("M", "Mother"))
       has_child <- any(grepl("^C\\d+$|Child", fam_data[[member_col]]))
+      has_father && has_mother && has_child
+    }))
 
-      if (has_father && has_mother && has_child) {
-        complete_families <- complete_families + 1
-      }
-    }
-
-    message(
-      sprintf(
-        "\t   %d/%d families have complete trios (father, mother, and at least one child)",
-        complete_families,
-        n_families
-      )
-    )
+    message(sprintf(
+      "\t   %d/%d families have complete trios (father, mother, child).",
+      complete_families, n_families
+    ))
   }
 
-  return(TRUE)
+  TRUE
 }
+
 
 # ~~~~~~~~~~~~~~~~~~~~~
 # validate_regular_data
@@ -1287,7 +1294,7 @@ validate_family_data <- function(df,
 #' @param verbose Logical. If TRUE, prints detailed validation information
 #'
 #' @return Logical indicating if data is valid
-#' @export
+#' @keywords internal
 validate_regular_data <- function(df,
                                   stop_if_invalid = TRUE,
                                   verbose = TRUE) {
@@ -1403,11 +1410,14 @@ reorder_drb_alleles <- function(df, quiet = FALSE) {
   }
 
   if (!quiet && swapped_total > 0) {
-    message(sprintf("\t🔄 Reordered DRB alleles in %d samples to ensure _1 is populated when possible.", swapped_total))
+    message(sprintf(
+      "\t🔄 Reordered DRB alleles in %d samples to ensure _1 is populated when possible.",
+      swapped_total
+    ))
   }
-
-  return(df)
+  df
 }
+
 
 # ~~~~~~~~~~~~~~~~~~~~~
 # check_deleted_alleles
@@ -1415,66 +1425,55 @@ reorder_drb_alleles <- function(df, quiet = FALSE) {
 #' Check HLA dataframe for deleted alleles
 #'
 #' @description Analyzes a dataframe containing HLA allele designations, checking for
-#' deleted alleles according to the IMGT/HLA database.
+#' deleted alleles according to the IMGT/HLA database. Downloads and parses the official
+#' deleted allele list, then matches any occurrences in the user's data.
 #'
-#' @param df_hla A dataframe containing HLA allele typing data
+#' @param df_hla A dataframe containing HLA allele typing data.
 #' @param deleted_file_path Path or URL to the Deleted_alleles.txt file
-#'        (default: IMGT/HLA database URL)
+#'        (default: IMGT/HLA database URL).
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
-#' @return A dataframe containing information about deleted alleles found
+#' @return A dataframe containing information about deleted alleles found in the input.
 #'
 #' @examples
 #' \dontrun{
-#' # Check dataframe for deleted alleles
 #' results <- check_deleted_alleles(df_hla)
 #' }
-#' @export
-check_deleted_alleles <- function(df_hla,
-                                  deleted_file_path = "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Deleted_alleles.txt",
-                                  quiet = FALSE) {
+#' @keywords internal
+#' @importFrom curl curl
+check_deleted_alleles <- function(
+    df_hla,
+    deleted_file_path = "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Deleted_alleles.txt",
+    quiet = FALSE) {
   if (!quiet) {
     message("\t🔍 Checking for deleted HLA alleles...")
-    message("\t📂 Using deleted alleles from: ", deleted_file_path)
+    message("\t📥 Downloading current list of deleted alleles from:\n\t ", deleted_file_path)
   }
 
-  # Read deleted alleles file
   deleted_alleles <- list()
 
   tryCatch(
     {
-      # Check if file is local or URL
-      if (grepl("^https?://", deleted_file_path)) {
-        con <- url(deleted_file_path)
+      con <- if (grepl("^https?://", deleted_file_path)) {
+        curl::curl(deleted_file_path)
       } else {
-        con <- file(deleted_file_path)
+        file(deleted_file_path, open = "r")
       }
 
-      # Read the file
-      lines <- readLines(con)
+      lines <- readLines(con, warn = FALSE)
       close(con)
 
-      # Skip header lines and parse content
       header_found <- FALSE
 
       for (line in lines) {
-        # Skip comments and empty lines
-        if (grepl("^#", line) || nchar(trimws(line)) == 0) {
-          next
-        }
-
-        # If we find the header line, mark it and skip
+        if (grepl("^#", line) || nchar(trimws(line)) == 0) next
         if (grepl("^AlleleID,Allele,Description", line)) {
           header_found <- TRUE
           next
         }
-
-        # Only process lines after header
         if (header_found) {
-          # Parse data lines
           split_line <- strsplit(line, ",")[[1]]
           if (length(split_line) >= 2) {
-            allele_id <- trimws(split_line[1])
             allele_name <- trimws(split_line[2])
             description <- if (length(split_line) >= 3) paste(split_line[3:length(split_line)], collapse = ",") else "No description"
             deleted_alleles[[allele_name]] <- description
@@ -1488,11 +1487,10 @@ check_deleted_alleles <- function(df_hla,
     },
     error = function(e) {
       message("\t❌ Error reading deleted alleles file: ", e$message)
-      return(NULL)
+      return(data.frame())
     }
   )
 
-  # If no deleted alleles were loaded, return empty dataframe
   if (length(deleted_alleles) == 0) {
     if (!quiet) {
       message("\t⚠️ No deleted alleles found in the reference file.")
@@ -1500,7 +1498,6 @@ check_deleted_alleles <- function(df_hla,
     return(data.frame())
   }
 
-  # Create results dataframe
   results <- data.frame(
     FAMILY_ID = character(),
     Family_Member = character(),
@@ -1510,24 +1507,13 @@ check_deleted_alleles <- function(df_hla,
     stringsAsFactors = FALSE
   )
 
-  # Get columns that might contain HLA alleles (all columns except FAMILY_ID and Family_Member)
   hla_columns <- setdiff(names(df_hla), c("FAMILY_ID", "Family_Member"))
 
-  # For each row in the dataframe
-  for (i in 1:nrow(df_hla)) {
-    # For each potential HLA column
+  for (i in seq_len(nrow(df_hla))) {
     for (col in hla_columns) {
-      # Get the allele value
       allele <- df_hla[i, col]
-
-      # Skip NA or empty values
-      if (is.na(allele) || allele == "") {
-        next
-      }
-
-      # Check if the allele is in the deleted list
+      if (is.na(allele) || allele == "") next
       if (allele %in% names(deleted_alleles)) {
-        # Add to results dataframe
         results <- rbind(results, data.frame(
           FAMILY_ID = df_hla$FAMILY_ID[i],
           Family_Member = df_hla$Family_Member[i],
@@ -1555,5 +1541,5 @@ check_deleted_alleles <- function(df_hla,
     }
   }
 
-  return(results)
+  results
 }
