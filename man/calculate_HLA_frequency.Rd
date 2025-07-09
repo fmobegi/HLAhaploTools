@@ -16,7 +16,7 @@ A tibble with columns: gene, allele, count, freq; sorted by gene and descending 
 }
 \description{
 Computes allele frequencies for all HLA genes in a tidy dataset with \verb{_1} and \verb{_2} allele columns.
-If no population column exists, a default "FSH_Immuno" value is used.
+If no population column exists, a default "POP" value is used.
 Handles multi-allele strings (e.g., "A\emph{01:01:01:01/A}01:01:01:02") by splitting before counting.
 }
 \examples{
