@@ -1,0 +1,51 @@
+For each locus, and each allele, track child inheritence .. single value unless parents have shared alleles.. also monitor different resolutions between parents and children by trimming down.. longer res.
+Use these values to come up with consensus segregation column (`Segregation`).
+This assumes that alleles deviating from majority pattern could result into same pattern if sorted.. e.g if majority is BD but AC/AD also occur, then BD will be supported if father or mother allele_1 and allele_2 are swapped for those deviating genes/loci.
+  
+
+# df_summary_segre
+FAMILY_ID Family_Member Segregation
+ 1 Family1   F          AB
+ 2 Family1   M          CD
+ 3 Family1   C1         BD
+ 4 Family1   C2         AD
+ 5 Family1   C3         
+ 6 Family2   F          AB
+ 7 Family2   M          CD
+ 8 Family2   C1         
+ 9 Family2   C2         
+10 Family2   C3         
+11 Family3   F          AB
+12 Family3   M          CD
+13 Family3   C1         
+14 Family3   C2         
+
+# df_detailed_segre
+FAMILY_ID	Family_Member	Segregation	A_1	A_2	B_1	B_2	C_1	C_2	DRB1_1	DRB1_2	DRB3_1	DRB4_1	DRB4_2	DRB5_1	DQA1_1	DQA1_2	DQB1_1	DQB1_2	DPA1_1	DPA1_2	DPB1_1	DPB1_2	E_1	E_2	F_1	F_2
+Family1	F	AB	A*25:01:01:01	A*30:02:01:01	B*18:01:01:05	B*18:01:01:06	C*05:01:01	C*12:03:01	DRB1*03:01:01	DRB1*15:01:01	DRB3*02:02:01	NA	NA	DRB5*01:01:01	DQA1*01:02:01	DQA1*05:01:01	DQB1*02:01:01	DQB1*06:02:01	DPA1*01:03:01:03	DPA1*01:03:01:04	DPB1*03:01:01	DPB1*04:01:01:03	E*01:01:01	E*01:03:02	F*01:01:01:08	F*01:01:01:17
+Family1	M	CD	A*02:01:01	A*26:01:01:01	B*13:02:01:01	B*44:03:01	C*06:02:01	C*16:01:01	DRB1*07:01:01	DRB1*07:01:01	NA	DRB4*01:01:01	DRB4*01:03:01	NA	DQA1*02:01:01	DQA1*02:01:01	DQB1*02:02:01	DQB1*02:02:01	DPA1*01:03:01:01	DPA1*01:03:01:02	DPB1*02:01:02	DPB1*04:01:01	E*01:01:01	E*01:03:02:32	F*01:01:01:01	F*01:01:01:08
+Family1	C1	BD	A*26:01:01:01	A*30:02:01:01	B*18:01:01:06	B*44:03:01	C*05:01:01	C*16:01:01	DRB1*03:01:01	DRB1*07:01:01	DRB3*02:02:01	DRB4*01:01:01	NA	NA	DQA1*02:01:01	DQA1*05:01:01	DQB1*02:01:01	DQB1*02:02:01	DPA1*01:03:01:01	DPA1*01:03:01:04	DPB1*02:01:02	DPB1*04:01:01:03	E*01:03:02	E*01:03:02	F*01:01:01:08	F*01:01:01:17
+Family1	C1	detail	D	B	B	D	A	D	A	D	A	C	NA	NA	CD	B	ACD	ACD	C	B	C	B	BD	BD	AD	B
+Family1	C2	AD	A*25:01:01:01	A*26:01:01:01	B*18:01:01:05	B*44:03:01	C*12:03:01	C*16:01:01	DRB1*07:01:01	DRB1*15:01:01	NA	DRB4*01:01:01	NA	DRB5*01:01:01	DQA1*01:02:01	DQA1*02:01:01	DQB1*02:02:01	DQB1*06:02:01	DPA1*01:03:01:01	DPA1*01:03:01:03	DPB1*02:01:02	DPB1*03:01:01	E*01:01:01:01	E*01:03:02:01	F*01:01:01:08	F*01:01:01:08
+Family1	C2	detail	A	D	A	D	B	D	CD	B	NA	D	NA	AB	A	CD	ACD	B	C	A	C	A	AC	B 	AD	AD
+																	A CAN BE ELIMINATED BASED ON ALLELE2 BEING B (PATERNAL)						DIFFERENT RESOLTIONS / A CAN BE ELIMINATED SINCE ALLELE 2 IS PATERNAL			
+
+
+the haplotypes will then be top two patters of genes inheritance patterns collapsed by ~
+
+homozygous alleles as well as alleles identical in parents are not tracked well. 
+F DQB1*02:01:01	DQB1*06:02:01
+M DQB1*02:02:01	DQB1*02:02:01
+C DQB1*02:01:01	DQB1*02:02:01
+  ACD	ACD
+in this case, one of the alleles will be A and the other C/D to be decided based on majority.
+
+Also, in cases where trimming causes identical alleles, 
+F E*01:01:01	E*01:03:02
+M E*01:01:01	E*01:03:02:32
+C E*01:03:02	E*01:03:02
+  BD	BD
+in this case, each allele will take 1 pattern from each parent thus B fro allele 1 and D for allele 2
+
+Don't use x for details .. just use NA where NA. don't recreate NA columns in dataset especially in DRB 3 4 5 where one of the alleles could be missing
+

@@ -1,4 +1,9 @@
 .Rproj.user
+.Rproj
+.txt
+.tsv
+.xlsx
+.xls
 .Rhistory
 .Rdata
 .httr-oauth
