@@ -43,7 +43,7 @@ standardize_colnames <- function(df, quiet = FALSE) {
 # ~~~~~~~~~~~~
 #' Extract HLA Locus Names from Genotype Table
 #'
-#' Identifies unique locus names based on *_1 and *_2 suffixes.
+#' Identifies unique locus names based on "_1" and "_2" suffixes.
 #'
 #' @param df A data frame with standardized column names.
 #' @param quiet Logical. If TRUE, suppresses status messages.

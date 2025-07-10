@@ -139,20 +139,42 @@ detect_data_type <- function(df, quiet = FALSE) {
   sample_id_keys <- c("sampleid", "sample_id", "id", "patient_id", "subject_id", "donor_id", "recipientid")
 
   # Identify matching columns
-  family_col <- col_names[match(TRUE, col_names_lower %in% family_id_keys, nomatch = 0)]
-  member_col <- col_names[match(TRUE, col_names_lower %in% member_keys, nomatch = 0)]
-  sample_id_cols <- col_names[col_names_lower %in% sample_id_keys]
+  family_matches <- which(col_names_lower %in% family_id_keys)
+  member_matches <- which(col_names_lower %in% member_keys)
+  sample_id_matches <- which(col_names_lower %in% sample_id_keys)
 
-  # Check if it’s family data
-  is_family <- !is.null(family_col) && !is.null(member_col)
+  family_col <- if (length(family_matches) > 0) col_names[family_matches[1]] else NULL
+  member_col <- if (length(member_matches) > 0) col_names[member_matches[1]] else NULL
+  sample_id_cols <- if (length(sample_id_matches) > 0) col_names[sample_id_matches] else character(0)
 
-  # Validate content if family_member column is found
-  if (is_family) {
-    member_vals <- unique(as.character(df[[member_col]]))
-    expected_patterns <- c("^F$", "^M$", "^C\\d+$", "^Father$", "^Mother$", "^Child")
-    if (!any(sapply(expected_patterns, grepl, x = member_vals))) {
-      is_family <- FALSE
+  # Strictly check if data qualifies as family format
+  is_family <- FALSE
+  if (!is.null(family_col) && !is.null(member_col) &&
+    family_col %in% colnames(df) && member_col %in% colnames(df)) {
+    fam_values <- df[[family_col]]
+    member_vals <- unique(na.omit(as.character(df[[member_col]])))
+    fam_repeats <- any(table(fam_values) > 1)
+
+    valid_member_labels <- sum(member_vals %in% c("F", "M", "Father", "Mother", "Child")) +
+      sum(grepl("^C\\d+$", member_vals))
+
+    is_family <- fam_repeats && valid_member_labels >= 2
+  }
+
+  # Fallback logic for non-family format
+  id_cols <- if (is_family) {
+    na.omit(c(family_col, member_col))
+  } else if (length(sample_id_cols) > 0) {
+    sample_id_cols
+  } else if (!is.null(family_col) && family_col %in% colnames(df)) {
+    family_col
+  } else {
+    fallback_col <- "Sample_ID"
+    if (!(fallback_col %in% colnames(df))) {
+      df[[fallback_col]] <- seq_len(nrow(df)) # inject row-based IDs
+      if (!quiet) message(sprintf("\t⚠️ No ID columns found; added fallback ID column '%s'", fallback_col))
     }
+    fallback_col
   }
 
   # Messages
@@ -163,7 +185,7 @@ detect_data_type <- function(df, quiet = FALSE) {
       message(sprintf("\t   Found family member column: %s", member_col))
     } else {
       message("\t👤 Data appears to be REGULAR TYPING format (e.g., registry or population data)")
-      if (length(sample_id_cols)) {
+      if (length(sample_id_cols) > 0) {
         message(sprintf("\t   Found sample ID columns: %s", paste(sample_id_cols, collapse = ", ")))
       } else if (!is.null(family_col)) {
         message(sprintf("\t   Using %s as sample identifier", family_col))
@@ -178,13 +200,7 @@ detect_data_type <- function(df, quiet = FALSE) {
     is_family = is_family,
     family_col = if (is_family) family_col else NULL,
     member_col = if (is_family) member_col else NULL,
-    id_cols = if (is_family) {
-      # Use family + member column
-      na.omit(c(family_col, member_col))
-    } else {
-      # Use all detected sample ID columns, or fallback to family_col if available
-      unique(na.omit(c(sample_id_cols, family_col)))
-    }
+    id_cols = id_cols
   )
 }
 
@@ -1298,8 +1314,9 @@ validate_family_data <- function(df,
 validate_regular_data <- function(df,
                                   stop_if_invalid = TRUE,
                                   verbose = TRUE) {
-  # First check if this is regular (non-family) data
-  is_family <- detect_data_type(df, quiet = !verbose)
+  # Use structured detection
+  detect <- detect_data_type(df, quiet = !verbose)
+  is_family <- detect$is_family
 
   if (is_family) {
     if (stop_if_invalid) {
@@ -1311,57 +1328,25 @@ validate_regular_data <- function(df,
     return(FALSE)
   }
 
-  # Additional validations for regular data
   if (verbose) {
     message("\n\t🔍 Validating regular typing data structure...")
 
-    # Check for sample identifiers
-    possible_id_cols <- c(
-      "SampleID",
-      "Sample_ID",
-      "ID",
-      "Id",
-      "id",
-      "PATIENT_ID",
-      "Patient_ID",
-      "Subject_ID",
-      "Donor_ID",
-      "donor_id",
-      "RecipientID",
-      "recipient_id"
-    )
+    id_cols <- detect$id_cols
+    id_col <- if (length(id_cols) > 0) id_cols[1] else NULL
 
-    found_id_col <- NULL
-    for (col in possible_id_cols) {
-      if (col %in% colnames(df)) {
-        found_id_col <- col
-        break
-      }
-    }
-
-    if (!is.null(found_id_col)) {
-      n_unique <- length(unique(df[[found_id_col]]))
+    if (!is.null(id_col) && id_col %in% colnames(df)) {
+      n_unique <- length(unique(df[[id_col]]))
       n_total <- nrow(df)
-      message(
-        sprintf(
-          "\t   Found %d unique samples in %d records using column '%s'",
-          n_unique,
-          n_total,
-          found_id_col
-        )
-      )
+      message(sprintf(
+        "\t   Found %d unique samples in %d records using column '%s'",
+        n_unique, n_total, id_col
+      ))
 
       if (n_unique < n_total) {
         message("\t⚠️ Warning: Duplicate sample IDs detected")
       }
-    } else if ("FAMILY_ID" %in% colnames(df)) {
-      n_unique <- length(unique(df$FAMILY_ID))
-      message(sprintf(
-        "\t   Using FAMILY_ID as sample identifier: %d unique IDs",
-        n_unique
-      ))
     } else {
-      message("\t⚠️ Warning: No standard identifier column found - will use row numbers")
+      message("\t⚠️ No valid sample identifier found — using row numbers")
     }
   }
 
