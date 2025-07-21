@@ -35,7 +35,7 @@ compute_hla_segregation <- function(hped, collapse = "~") {
       sorted <- t(apply(hped[, c(c1, c2)], 1, function(r) {
         r <- r[!is.na(r) & r != "" & r != "NULL"]
         if (length(r) < 2) {
-          return(c(r, NA)[1:2])
+          c(r, NA)[1:2]
         }
         sort(r)
       }))
@@ -46,7 +46,7 @@ compute_hla_segregation <- function(hped, collapse = "~") {
 
   trim_resolution <- function(allele, max_res) {
     if (is.na(allele)) {
-      return(NA)
+      NA
     }
     parts <- unlist(strsplit(allele, ":"))
     paste(head(parts, max_res), collapse = ":")
@@ -54,17 +54,17 @@ compute_hla_segregation <- function(hped, collapse = "~") {
 
   resolve_tag <- function(a, f1, f2, m1, m2) {
     if (is.null(a) || length(a) == 0 || is.na(a)) {
-      return("x")
+      "x"
     }
     f_set <- na.omit(c(f1, f2))
     m_set <- na.omit(c(m1, m2))
 
     # Full resolution match
     if (a %in% f_set) {
-      return(ifelse(a == f1, "A", ifelse(a == f2, "B", "A/B")))
+      ifelse(a == f1, "A", ifelse(a == f2, "B", "A/B"))
     }
     if (a %in% m_set) {
-      return(ifelse(a == m1, "C", ifelse(a == m2, "D", "C/D")))
+      ifelse(a == m1, "C", ifelse(a == m2, "D", "C/D"))
     }
 
     max_res <- min(
@@ -84,15 +84,15 @@ compute_hla_segregation <- function(hped, collapse = "~") {
     in_m <- a_trim %in% m_trim
 
     if (in_f && !in_m) {
-      return("A/B")
+      "A/B"
     }
     if (!in_f && in_m) {
-      return("C/D")
+      "C/D"
     }
     if (in_f && in_m) {
-      return("A/B,C/D")
+      "A/B,C/D"
     }
-    return(NA)
+    NA
   }
 
   rows_out <- list()

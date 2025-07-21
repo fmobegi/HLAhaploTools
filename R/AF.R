@@ -37,13 +37,13 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
   if (nrow(hped) == 0) {
     warning("\t⚠️ Input has zero rows. Returning empty frequency table.")
-    return(tibble::tibble(
+    tibble::tibble(
       gene = character(),
       allele = character(),
       count = integer(),
       freq = numeric(),
       pop = character()
-    ))
+    )
   }
 
   if (!"Population" %in% colnames(hped)) {
@@ -56,13 +56,13 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
   allele_cols <- grep("_[12]$", names(hped), value = TRUE)
   if (length(allele_cols) == 0) {
     warning("\t❌ No HLA allele columns found (_1, _2 suffix).")
-    return(tibble::tibble(
+    tibble::tibble(
       gene = character(),
       allele = character(),
       count = integer(),
       freq = numeric(),
       pop = character()
-    ))
+    )
   }
 
   gene_names <- unique(sub("_[12]$", "", allele_cols))
@@ -96,7 +96,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
         if (length(alleles_clean) == 0) {
           if (!quiet) message(sprintf("\t⚠️ Gene '%s' has no valid allele data — skipped.", gene))
-          return(NULL)
+          NULL
         }
 
         counts <- table(alleles_clean)
@@ -115,7 +115,7 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
           ))
         }
 
-        return(result)
+        result
       },
       error = function(e) {
         warning(sprintf("\t❌ Skipping '%s' due to error: %s", gene, e$message))
@@ -129,13 +129,13 @@ calculate_hla_frequency <- function(hped, quiet = FALSE) {
 
   if (nrow(df_freq) == 0) {
     warning("\t⚠️ No valid allele data found.")
-    return(tibble::tibble(
+    tibble::tibble(
       gene = character(),
       allele = character(),
       count = integer(),
       freq = numeric(),
       pop = character()
-    ))
+    )
   }
 
   df_freq <- dplyr::arrange(df_freq, gene, dplyr::desc(freq))
@@ -376,7 +376,7 @@ plot_hla_allele_frequency <- function(freq_data,
   if (!quiet) {
     message("\t✅ Allele Frequency Plot created successfully.")
   }
-  return(p)
+  p
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~
@@ -436,11 +436,11 @@ plot_hla_allele_count <- function(freq_data,
 
   if (nrow(allele_counts) == 0) {
     warning(sprintf("\t⚠️ No genes with at least %d unique alleles.", min_count))
-    return(ggplot2::ggplot() +
+    ggplot2::ggplot() +
       ggplot2::theme_void() +
       ggplot2::ggtitle(sprintf(
         "No genes with ≥%d unique alleles", min_count
-      )))
+      ))
   }
 
   # Determine classes found in data
@@ -526,7 +526,7 @@ plot_hla_allele_count <- function(freq_data,
   if (!quiet) {
     message("\t✅ Allele count plot created successfully.")
   }
-  return(p)
+  p
 }
 
 # ~~~~~~~~~~~~~~~~~~
@@ -578,11 +578,10 @@ plot_hla_diversity <- function(freq_data,
 
   if (nrow(gene_data) == 0) {
     warning(sprintf("\t⚠️ No allele data found for gene '%s'.", gene))
-    return(
-      ggplot2::ggplot() +
-        ggplot2::theme_void() +
-        ggplot2::ggtitle(sprintf("No allele data for %s", gene))
-    )
+
+    ggplot2::ggplot() +
+      ggplot2::theme_void() +
+      ggplot2::ggtitle(sprintf("No allele data for %s", gene))
   }
 
   if (!quiet) {
@@ -652,7 +651,7 @@ plot_hla_diversity <- function(freq_data,
   if (!quiet) {
     message("\t✅ Diversity plot created successfully.")
   }
-  return(p)
+  p
 }
 
 ## --------------- END OF EXPORTED FUNCTIONS ------------------------

@@ -9,7 +9,10 @@
 *.httr-oauth
 *.DS_Store
 *.quarto
+*.vscode*
+*.lintr
 inst/doc
 inst/extdata
 /doc/
 /Meta/
+.Rproj.user

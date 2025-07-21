@@ -35,7 +35,7 @@ standardize_colnames <- function(df, quiet = FALSE) {
     ))
   }
 
-  return(df)
+  df
 }
 
 # ~~~~~~~~~~~~
@@ -64,7 +64,7 @@ extract_loci <- function(df, quiet = FALSE) {
   allele_cols <- grep("_[12]$", names(df), value = TRUE)
   if (length(allele_cols) == 0) {
     warning("\t⚠️ No HLA allele columns found with _1 or _2 suffix.")
-    return(character(0))
+    character(0)
   }
 
   loci <- unique(gsub("_[12]$", "", allele_cols))
@@ -73,7 +73,7 @@ extract_loci <- function(df, quiet = FALSE) {
     message(sprintf("\t✅ Found %d HLA loci: %s", length(loci), paste(loci, collapse = ", ")))
   }
 
-  return(loci)
+  loci
 }
 
 # ~~~~~~~~~~~~~~~~~~
@@ -144,7 +144,7 @@ collapse_genotypes <- function(df,
 
     result[[gene]] <- mapply(function(a1, a2) {
       if (is.na(a1) || a1 == "" || is.na(a2) || a2 == "") {
-        return(NA_character_)
+        NA_character_
       }
       paste(a1, a2, sep = separator)
     }, df[[col1]], df[[col2]])
@@ -159,7 +159,7 @@ collapse_genotypes <- function(df,
     ))
   }
 
-  return(result)
+  result
 }
 
 # ~~~~~~~~~~~~~~~~~~~~
@@ -200,7 +200,7 @@ enumerate_diplotypes <- function(geno_row,
     genotype <- geno_row_filtered[[gene]]
 
     if (is.na(genotype) || genotype == "") {
-      return(list(NULL))
+      list(NULL)
     }
 
     alleles <- unlist(strsplit(genotype, separator, fixed = TRUE))
@@ -211,7 +211,7 @@ enumerate_diplotypes <- function(geno_row,
           gene, length(alleles)
         ))
       }
-      return(list(NULL))
+      list(NULL)
     }
 
     format_allele <- function(a, g) {
@@ -230,7 +230,7 @@ enumerate_diplotypes <- function(geno_row,
 
   if (length(allele_lists) == 0) {
     if (!quiet) message("\t⚠️ No valid genotypes found to enumerate.")
-    return(list())
+    list()
   }
 
   # Determine phasing combinations (2^(n-1))
@@ -270,7 +270,7 @@ enumerate_diplotypes <- function(geno_row,
     ))
   }
 
-  return(result)
+  result
 }
 
 
@@ -316,7 +316,7 @@ compute_posteriors <- function(all_diplotypes,
 
   result <- lapply(all_diplotypes, function(subject_diplotypes) {
     if (length(subject_diplotypes) == 0) {
-      return(NULL)
+      NULL
     }
 
     probs <- vapply(subject_diplotypes, function(diplotype) {
@@ -324,7 +324,7 @@ compute_posteriors <- function(all_diplotypes,
       h2 <- diplotype$hap2
 
       if (!h1 %in% names(hap_freqs) || !h2 %in% names(hap_freqs)) {
-        return(0)
+        0
       }
 
       if (h1 == h2) hap_freqs[h1]^2 else 2 * hap_freqs[h1] * hap_freqs[h2]
@@ -342,7 +342,7 @@ compute_posteriors <- function(all_diplotypes,
     message(sprintf("\t✅ Computed posteriors for %d subjects.", non_null))
   }
 
-  return(result)
+  result
 }
 
 
@@ -391,7 +391,7 @@ run_em_algorithm <- function(all_diplotypes,
 
   all_haps <- unique(unlist(lapply(all_diplotypes, function(subject) {
     if (length(subject) == 0) {
-      return(NULL)
+      NULL
     }
     unlist(lapply(subject, function(d) c(d$hap1, d$hap2)))
   })))
@@ -423,7 +423,7 @@ run_em_algorithm <- function(all_diplotypes,
         h1 <- pair[1]
         h2 <- pair[2]
         if (!h1 %in% names(hap_freqs) || !h2 %in% names(hap_freqs)) {
-          return(0)
+          0
         }
         if (h1 == h2) hap_freqs[h1]^2 else 2 * hap_freqs[h1] * hap_freqs[h2]
       }, numeric(1))
@@ -462,7 +462,7 @@ run_em_algorithm <- function(all_diplotypes,
   attr(hap_freqs, "converged") <- converged
   attr(hap_freqs, "iterations") <- iter
 
-  return(hap_freqs)
+  hap_freqs
 }
 
 
@@ -612,10 +612,10 @@ infer_haplotypes <- function(df,
   hap_freq_df <- tibble::tibble(
     haplotype = names(hap_freqs),
     frequency = as.numeric(hap_freqs)
-  ) %>%
+  ) %>% # nolint # nolint: object_usage_linter.
     dplyr::arrange(dplyr::desc(frequency)) %>%
     dplyr::mutate(
-      rank = seq_len(n()),
+      rank = seq_len(n()), # nolint: object_usage_linter.
       cumulative_freq = cumsum(frequency)
     )
 
@@ -632,7 +632,7 @@ infer_haplotypes <- function(df,
     message(sprintf("\t✅ HLA haplotype inference complete: %d unique haplotypes identified.", nrow(hap_freq_df)))
   }
 
-  return(result)
+  result
 }
 
 
@@ -678,11 +678,10 @@ plot_top_haplotypes <- function(hap_freq,
 
   if (nrow(plot_data) == 0) {
     warning(sprintf("\t⚠️ No haplotypes meet the minimum frequency threshold of %.4f", min_freq))
-    return(
-      ggplot2::ggplot() +
-        ggplot2::theme_void() +
-        ggplot2::ggtitle("No haplotypes meet frequency threshold")
-    )
+
+    ggplot2::ggplot() +
+      ggplot2::theme_void() +
+      ggplot2::ggtitle("No haplotypes meet frequency threshold")
   }
 
   if (nrow(plot_data) > n_top) {
@@ -700,7 +699,7 @@ plot_top_haplotypes <- function(hap_freq,
 
   p <- ggplot2::ggplot(
     plot_data, ggplot2::aes(
-      x = haplotype,
+      x = haplotype, # nolint: object_usage_linter.
       y = frequency
     )
   ) +
@@ -727,5 +726,5 @@ plot_top_haplotypes <- function(hap_freq,
     )
 
   if (!quiet) message("\t✅ Haplotype frequency plot created successfully.")
-  return(p)
+  p
 }

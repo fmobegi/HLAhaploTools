@@ -96,7 +96,8 @@ test_that("collapse_genotypes works", {
   loci <- c("A", "B")
 
   # Test collapsing - explicitly set isFamily=FALSE
-  genotypes <- collapse_genotypes(prep$test_data, loci, quiet = TRUE, isFamily = FALSE)
+  genotypes <- collapse_genotypes(prep$test_data, loci, quiet = TRUE, isfamily = FALSE)
+
 
   # Check result structure
   expect_equal(nrow(genotypes), nrow(prep$test_data))

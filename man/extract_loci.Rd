@@ -15,7 +15,7 @@ extract_loci(df, quiet = FALSE)
 A character vector of distinct locus names (e.g. A, B, DRB1).
 }
 \description{
-Identifies unique locus names based on *_1 and *_2 suffixes.
+Identifies unique locus names based on "_1" and "_2" suffixes.
 }
 \examples{
 \dontrun{

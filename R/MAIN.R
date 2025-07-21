@@ -15,7 +15,7 @@
 #' @param mac Logical. If TRUE, decode multi-allele codes using `decode_classical_mac()` (default = TRUE).
 #' @param plot_freq Logical. If TRUE, generates allele frequency plot (default = FALSE).
 #' @param plot_count Logical. If TRUE, plots unique allele counts across loci (default = FALSE).
-#' @param plot_diversity Logical. If TRUE, plots diversity indices across populations for selected gene(s) (default = FALSE).
+#' @param plot_diversity Logical. If TRUE, plots diversity across populations for selected gene(s) (default = FALSE).
 #' @param plot_haplotypes Logical. If TRUE, plots top inferred haplotype frequencies (default = FALSE).
 #' @param gene Character vector. Genes to use for diversity plotting (default = "A").
 #' @param parallel Logical. If TRUE, uses parallelization for EM haplotype inference (default = TRUE).
@@ -70,7 +70,11 @@ HLAhaploTools <- function(filepath,
     message(sprintf("\tPlot unique allele count: %s", plot_count))
     message(sprintf("\tPlot diversity: %s (gene: %s)", plot_diversity, gene))
     message(sprintf("\tPlot haplotypes: %s", plot_haplotypes))
-    message(sprintf("\tParallel processing: %s (workers: %s)", parallel, ifelse(is.null(n_workers), "Auto-detect", n_workers)))
+    message(sprintf(
+      "\tParallel processing: %s (workers: %s)",
+      parallel,
+      ifelse(is.null(n_workers), "Auto-detect", n_workers)
+    ))
   }
 
   #++++++++++++++++++ Step 1: Load data file
@@ -213,15 +217,26 @@ HLAhaploTools <- function(filepath,
 
   #++++++++++++++++++ Return results
   result_df <- list(
-    typing_data           = df_decoded,
-    allele_frequencies    = df_allele_freq,
+    typing_data = df_decoded,
+    allele_frequencies = df_allele_freq,
     haplotype_frequencies = NULL,
-    posteriors            = NULL,
-    top_diplotypes        = NULL,
-    loci_used             = NULL,
-    convergence           = NA,
-    family_segregation    = if (exists("df_segregation") && !is.null(df_segregation)) df_segregation else NULL,
-    deleted_alleles       = if (exists("df_deleted_alleles") && !is.null(df_deleted_alleles) && nrow(df_deleted_alleles) > 0) df_deleted_alleles else NULL
+    posteriors = NULL,
+    top_diplotypes = NULL,
+    loci_used = NULL,
+    convergence = NA,
+    family_segregation = if (exists("df_segregation") &&
+      !is.null(df_segregation)) {
+      df_segregation
+    } else {
+      NULL
+    },
+    deleted_alleles = if (exists("df_deleted_alleles") &&
+      !is.null(df_deleted_alleles) &&
+      nrow(df_deleted_alleles) > 0) {
+      df_deleted_alleles
+    } else {
+      NULL
+    }
   )
 
   if (exists("haplotype_results") && !is.null(haplotype_results)) {

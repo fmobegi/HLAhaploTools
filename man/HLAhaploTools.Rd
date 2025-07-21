@@ -39,7 +39,7 @@ HLAhaploTools(
 
 \item{plot_count}{Logical. If TRUE, plots unique allele counts across loci (default = FALSE).}
 
-\item{plot_diversity}{Logical. If TRUE, plots diversity indices across populations for selected gene(s) (default = FALSE).}
+\item{plot_diversity}{Logical. If TRUE, plots diversity across populations for selected gene(s) (default = FALSE).}
 
 \item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies (default = FALSE).}
 

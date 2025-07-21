@@ -694,7 +694,15 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
             df_local[[a1]][i] <- df_local[[a2]][i]
             df_local[[a2]][i] <- NA
             swapped_total <- swapped_total + 1
-            if (!quiet_local) message(sprintf("\t🔄 Reordered %s alleles for sample %s (swapped _1 and _2)", gene, get_sample_id(i)))
+            if (!quiet_local) {
+              message(
+                sprintf(
+                  "\t🔄 Reordered %s alleles for sample %s (swapped _1 and _2)",
+                  gene,
+                  get_sample_id(i)
+                )
+              )
+            }
           }
         }
       }
@@ -724,7 +732,16 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
             !is.na(df_local[[a1]][i]) && df_local[[a1]][i] != "") {
             df_local[[a2]][i] <- df_local[[a1]][i]
             filled_count <- filled_count + 1
-            if (!quiet_local) message(sprintf("\t   Filled missing %s_2 allele for sample %s by copying %s_1", gene, get_sample_id(i), gene))
+            if (!quiet_local) {
+              message(
+                sprintf(
+                  "\t   Filled missing %s_2 allele for sample %s by copying %s_1",
+                  gene,
+                  get_sample_id(i),
+                  gene
+                )
+              )
+            }
           }
         }
       }
@@ -778,14 +795,35 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
           fill_value <- drb1_1
           if (!is.na(fill_value) && fill_value != "") {
             df_local[i, c(a1, a2)] <- fill_value
-            if (!quiet_local) message(sprintf("\t   Filled missing %s alleles for sample %s using DRB1_1 allele", drb_gene, get_sample_id(i)))
+            if (!quiet_local) {
+              message(
+                sprintf(
+                  "\t   Filled missing %s alleles for sample %s using DRB1_1 allele",
+                  drb_gene, get_sample_id(i)
+                )
+              )
+            }
           } else {
             compliant <- FALSE
-            if (!quiet_local) message(sprintf("\t⚠️ Sample %s missing required %s alleles and DRB1 allele not available for fill", get_sample_id(i), drb_gene))
+            if (!quiet_local) {
+              message(
+                sprintf(
+                  "\t⚠️ Sample %s missing required %s alleles and DRB1 allele not available for fill",
+                  get_sample_id(i), drb_gene
+                )
+              )
+            }
           }
         } else if (!drb1_requires && alleles_present) {
           compliant <- FALSE
-          if (!quiet_local) message(sprintf("\t⚠️ Sample %s has %s alleles present but DRB1 group(s) [%s] does not require it", get_sample_id(i), drb_gene, paste(drb1_groups, collapse = "/")))
+          if (!quiet_local) {
+            message(
+              sprintf(
+                "\t⚠️ Sample %s has %s alleles present but DRB1 group(s) [%s] does not require it",
+                get_sample_id(i), drb_gene, paste(drb1_groups, collapse = "/")
+              )
+            )
+          }
         }
       }
 
@@ -1460,7 +1498,11 @@ check_deleted_alleles <- function(
           split_line <- strsplit(line, ",")[[1]]
           if (length(split_line) >= 2) {
             allele_name <- trimws(split_line[2])
-            description <- if (length(split_line) >= 3) paste(split_line[3:length(split_line)], collapse = ",") else "No description"
+            description <- if (length(split_line) >= 3) {
+              paste(split_line[3:length(split_line)], collapse = ",")
+            } else {
+              "No description"
+            }
             deleted_alleles[[allele_name]] <- description
           }
         }
@@ -1472,7 +1514,7 @@ check_deleted_alleles <- function(
     },
     error = function(e) {
       message("\t❌ Error reading deleted alleles file: ", e$message)
-      return(data.frame())
+      data.frame()
     }
   )
 
@@ -1480,7 +1522,7 @@ check_deleted_alleles <- function(
     if (!quiet) {
       message("\t⚠️ No deleted alleles found in the reference file.")
     }
-    return(data.frame())
+    data.frame()
   }
 
   results <- data.frame(
