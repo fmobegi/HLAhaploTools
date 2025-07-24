@@ -192,28 +192,28 @@ HLAhaploTools <- function(filepath,
   if (!quiet) message("\n🧬 Step 8: Family segregation analysis")
   if (family_data_val) {
     if (!quiet) message("\t✅ Running segregation analysis...")
-    df_segregation <- compute_hla_segregation(hped = df_decoded)
+    df_segregation <- compute_hla_segregation(hped = df_decoded, collapse = "~")
   } else {
     if (!quiet) message("\tℹ️ Skipping segregation — data is not family-based.")
     df_segregation <- NULL
   }
 
-  # #++++++++++++++++++ Step 9: Haplotype inference
-  # if (!quiet) message("\n🔄 Step 9: Inferring haplotypes using EM...")
-  # haplotype_results <- infer_haplotypes(
-  #   df = df_decoded,
-  #   loci = NULL,
-  #   parallel = parallel,
-  #   n_workers = n_workers,
-  #   quiet = quiet,
-  #   isfamily = family_data_val
-  # )
-  #
-  # #++++++++++++++++++ Step 10: Haplotype plot
-  # if (plot_haplotypes) {
-  #   if (!quiet) message("\n📊 Step 10: Plotting haplotype frequencies...")
-  #   print(plot_top_haplotypes(haplotype_results$haplotype_frequencies, quiet = quiet))
-  # }
+  #++++++++++++++++++ Step 9: Haplotype inference
+  if (!quiet) message("\n🔄 Step 9: Inferring haplotypes using EM...")
+  haplotype_results <- infer_haplotypes(
+    df = df_decoded,
+    loci = NULL,
+    parallel = parallel,
+    n_workers = n_workers,
+    quiet = quiet,
+    isfamily = family_data_val
+  )
+
+  #++++++++++++++++++ Step 10: Haplotype plot
+  if (plot_haplotypes) {
+    if (!quiet) message("\n📊 Step 10: Plotting haplotype frequencies...")
+    print(plot_top_haplotypes(haplotype_results$haplotype_frequencies, quiet = quiet))
+  }
 
   #++++++++++++++++++ Return results
   result_df <- list(

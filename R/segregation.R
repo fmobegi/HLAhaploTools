@@ -53,18 +53,33 @@ compute_hla_segregation <- function(hped, collapse = "~") {
   }
 
   resolve_tag <- function(a, f1, f2, m1, m2) {
-    if (is.null(a) || length(a) == 0 || is.na(a)) {
-      "x"
+    # Convert all inputs to character and handle NA/NULL
+    a <- as.character(a)
+    f1 <- as.character(f1)
+    f2 <- as.character(f2)
+    m1 <- as.character(m1)
+    m2 <- as.character(m2)
+
+    if (is.null(a) || length(a) == 0 || is.na(a) || a == "NA") {
+      return("x")
     }
+
     f_set <- na.omit(c(f1, f2))
+    f_set <- f_set[f_set != "NA"]
     m_set <- na.omit(c(m1, m2))
+    m_set <- m_set[m_set != "NA"]
 
     # Full resolution match
     if (a %in% f_set) {
-      ifelse(a == f1, "A", ifelse(a == f2, "B", "A/B"))
+      return(ifelse(a == f1, "A", ifelse(a == f2, "B", "A/B")))
     }
     if (a %in% m_set) {
-      ifelse(a == m1, "C", ifelse(a == m2, "D", "C/D"))
+      return(ifelse(a == m1, "C", ifelse(a == m2, "D", "C/D")))
+    }
+
+    # Only proceed with trimming if all values are valid
+    if (any(is.na(c(a, f1, f2, m1, m2)) | c(a, f1, f2, m1, m2) == "NA")) {
+      return(NA)
     }
 
     max_res <- min(
@@ -84,15 +99,15 @@ compute_hla_segregation <- function(hped, collapse = "~") {
     in_m <- a_trim %in% m_trim
 
     if (in_f && !in_m) {
-      "A/B"
+      return("A/B")
     }
     if (!in_f && in_m) {
-      "C/D"
+      return("C/D")
     }
     if (in_f && in_m) {
-      "A/B,C/D"
+      return("A/B,C/D")
     }
-    NA
+    return(NA)
   }
 
   rows_out <- list()
@@ -119,16 +134,17 @@ compute_hla_segregation <- function(hped, collapse = "~") {
         c1 <- row[[paste0(gene, "_1")]]
         c2 <- row[[paste0(gene, "_2")]]
 
-        f1 <- if (paste0(gene, "_1") %in% names(dad)) dad[[paste0(gene, "_1")]] else NA
-        f2 <- if (paste0(gene, "_2") %in% names(dad)) dad[[paste0(gene, "_2")]] else NA
-        m1 <- if (paste0(gene, "_1") %in% names(mom)) mom[[paste0(gene, "_1")]] else NA
-        m2 <- if (paste0(gene, "_2") %in% names(mom)) mom[[paste0(gene, "_2")]] else NA
+        # Extract values as atomic vectors
+        f1 <- if (nrow(dad) > 0 && paste0(gene, "_1") %in% names(dad)) as.character(dad[[paste0(gene, "_1")]][1]) else NA
+        f2 <- if (nrow(dad) > 0 && paste0(gene, "_2") %in% names(dad)) as.character(dad[[paste0(gene, "_2")]][1]) else NA
+        m1 <- if (nrow(mom) > 0 && paste0(gene, "_1") %in% names(mom)) as.character(mom[[paste0(gene, "_1")]][1]) else NA
+        m2 <- if (nrow(mom) > 0 && paste0(gene, "_2") %in% names(mom)) as.character(mom[[paste0(gene, "_2")]][1]) else NA
 
         t1 <- resolve_tag(c1, f1, f2, m1, m2)
         t2 <- resolve_tag(c2, f1, f2, m1, m2)
 
-        tag_row[[paste0(gene, "_1")]] <- t1
-        tag_row[[paste0(gene, "_2")]] <- t2
+        tag_row[[paste0(gene, "_1")]] <- as.character(t1)
+        tag_row[[paste0(gene, "_2")]] <- as.character(t2)
 
         # For consensus pattern
         clean_pair <- paste0(gsub("[^ABCD]", "", t1), gsub("[^ABCD]", "", t2))
@@ -154,6 +170,10 @@ compute_hla_segregation <- function(hped, collapse = "~") {
       }
       out_row$Segregation <- ifelse(is.na(valid_pattern), "", valid_pattern)
     }
+
+    # Ensure all columns are character type for consistent binding
+    out_row[] <- lapply(out_row, as.character)
+    tag_row[] <- lapply(tag_row, as.character)
 
     rows_out <- append(rows_out, list(out_row))
     if (!is_parent) rows_out <- append(rows_out, list(tag_row))
