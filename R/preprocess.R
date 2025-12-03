@@ -1465,9 +1465,10 @@ reorder_drb_alleles <- function(df, quiet = FALSE) {
 #' @keywords internal
 #' @importFrom curl curl
 check_deleted_alleles <- function(
-    df_hla,
-    deleted_file_path = "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Deleted_alleles.txt",
-    quiet = FALSE) {
+  df_hla,
+  deleted_file_path = "https://ftp.ebi.ac.uk/pub/databases/ipd/imgt/hla/Deleted_alleles.txt",
+  quiet = FALSE
+) {
   if (!quiet) {
     message("\t🔍 Checking for deleted HLA alleles...")
     message("\t📥 Downloading current list of deleted alleles from:\n\t ", deleted_file_path)

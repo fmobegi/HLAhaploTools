@@ -23,7 +23,7 @@ Handles multi-allele strings (e.g., "A\emph{01:01:01:01/A}01:01:01:02") by split
 \dontrun{
 # Calculate frequencies from formatted data
 data <- load_typing_data("hla_data.csv") \%>\%
-  reformat_typing_data()
+   reformat_typing_data()
 
 # Get allele frequencies
 freqs <- calculate_hla_frequency(data)

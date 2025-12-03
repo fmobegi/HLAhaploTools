@@ -19,8 +19,7 @@ Identifies unique locus names based on "_1" and "_2" suffixes.
 }
 \examples{
 \dontrun{
-# Extract HLA loci from data
 loci <- extract_loci(hla_data)
-print(loci) # e.g., "A" "B" "C" "DRB1" "DQB1"
+print(loci)
 }
 }

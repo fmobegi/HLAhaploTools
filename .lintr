@@ -1,1 +1,4 @@
-linters: linters_with_defaults(line_length_linter = line_length_linter(130))
+linters: linters_with_defaults(
+  line_length_linter = line_length_linter(130),
+  indentation_linter = indentation_linter(indent = 3),
+  assignment_linter = assignment_linter(using = "<-"))

@@ -13,7 +13,7 @@ plot_top_haplotypes(
 )
 }
 \arguments{
-\item{hap_freq}{A data frame or tibble with haplotype frequencies.}
+\item{hap_freq}{A tibble with haplotype frequencies.}
 
 \item{n_top}{Number of top haplotypes to display (default = 20).}
 
@@ -24,18 +24,14 @@ plot_top_haplotypes(
 \item{quiet}{Logical. If TRUE, suppresses status messages.}
 }
 \value{
-A ggplot object that can be further customized or printed.
+A ggplot object.
 }
 \description{
 Visualizes the most common haplotypes and their frequencies.
 }
 \examples{
 \dontrun{
-# Basic usage with results from infer_haplotypes
-result <- infer_haplotypes(hla_data)
-p <- plot_top_haplotypes(result$haplotype_frequencies)
-
-# Customize to show only top 10 with higher threshold
-p <- plot_top_haplotypes(result$haplotype_frequencies, n_top = 10, min_freq = 0.02)
+result <- run_haplo_em("family_typing_data.tsv", loci)
+p <- plot_top_haplotypes(result, n_top = 10, min_freq = 0.02)
 }
 }

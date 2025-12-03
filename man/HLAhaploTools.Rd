@@ -25,33 +25,38 @@ HLAhaploTools(
 )
 }
 \arguments{
-\item{filepath}{Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).}
+\item{filepath}{Character. Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).}
 
-\item{trim}{Logical. If TRUE, applies \code{trim_hla_results()} to standardize allele resolution (default = FALSE).}
+\item{trim}{Logical. If TRUE, applies \code{trim_hla_results()} to standardize allele
+resolution. Default is FALSE.}
 
-\item{resolution}{Integer. Desired resolution for allele trimming (default = 3).}
+\item{resolution}{Integer. Desired resolution for allele trimming. Default is 3.}
 
-\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data format. If TRUE, treats input as family data.}
+\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data format.
+If TRUE, treats input as family data.}
 
-\item{mac}{Logical. If TRUE, decode multi-allele codes using \code{decode_classical_mac()} (default = TRUE).}
+\item{mac}{Logical. If TRUE, decode multi-allele codes using \code{decode_classical_mac()}.
+Default is TRUE.}
 
-\item{plot_freq}{Logical. If TRUE, generates allele frequency plot (default = FALSE).}
+\item{plot_freq}{Logical. If TRUE, generates allele frequency plot. Default is FALSE.}
 
-\item{plot_count}{Logical. If TRUE, plots unique allele counts across loci (default = FALSE).}
+\item{plot_count}{Logical. If TRUE, plots unique allele counts across loci. Default is FALSE.}
 
-\item{plot_diversity}{Logical. If TRUE, plots diversity across populations for selected gene(s) (default = FALSE).}
+\item{plot_diversity}{Logical. If TRUE, plots diversity across populations for selected gene(s).
+Default is FALSE.}
 
-\item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies (default = FALSE).}
+\item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies. Default is FALSE.}
 
-\item{gene}{Character vector. Genes to use for diversity plotting (default = "A").}
+\item{gene}{Character vector. Genes to use for diversity plotting. Default is "A".}
 
-\item{parallel}{Logical. If TRUE, uses parallelization for EM haplotype inference (default = TRUE).}
+\item{parallel}{Logical. If TRUE, uses parallelization for EM haplotype inference. Default is TRUE.}
 
-\item{n_workers}{Integer or NULL. Number of parallel workers. If NULL, uses \code{availableCores()} (default = NULL).}
+\item{n_workers}{Integer or NULL. Number of parallel workers. If NULL, uses \code{availableCores()}.
+Default is NULL.}
 
-\item{sheet}{Character or integer. Sheet name or index to use when reading Excel files (optional).}
+\item{sheet}{Character or integer. Sheet name or index to use when reading Excel files. Optional.}
 
-\item{quiet}{Logical. If TRUE, suppresses progress and status messaging (default = FALSE).}
+\item{quiet}{Logical. If TRUE, suppresses progress and status messaging. Default is FALSE.}
 }
 \value{
 A named list with the following components:
@@ -63,8 +68,8 @@ A named list with the following components:
 \item{top_diplotypes}{Tibble summarizing most likely diplotype assignment per subject}
 \item{loci_used}{Vector of HLA loci used in haplotype inference}
 \item{convergence}{Logical indicating convergence status of EM algorithm}
-\item{deleted_alleles}{Optional. Tibble of alleles flagged as deleted in IMGT/HLA reference}
-\item{family_segregation}{Optional. Output of segregation analysis if input is family-based}
+\item{deleted_alleles}{Optional tibble of alleles flagged as deleted in IMGT/HLA reference}
+\item{family_segregation}{Optional output of segregation analysis if input is family-based}
 }
 }
 \description{
@@ -73,9 +78,57 @@ haplotypes, including functions for haplotype construction, visualization,
 family-based inference, and population-level summaries.
 
 A master wrapper that loads HLA typing data from file, detects data format,
-applies optional formatting and trimming, decodes multi-allele strings (MAC),
-calculates allele-level summaries, performs haplotype inference via EM algorithm,
-and optionally generates plots. Supports both family and registry/population-based studies.
+applies optional trimming, decodes multi-allele codes (MAC), calculates allele-level
+summaries, performs haplotype inference via EM algorithm, and optionally generates plots.
+Supports both family-based and registry/population-based studies.
+}
+\details{
+This function provides a comprehensive pipeline for HLA typing analysis including:
+\itemize{
+\item Data loading and format detection
+\item Multi-allele code (MAC) decoding
+\item Allele frequency calculations
+\item Haplotype inference using EM algorithm
+\item Family segregation analysis (for family data)
+\item Optional visualization plots
+}
+
+The function automatically detects whether the input data represents family studies
+or population/registry data and applies appropriate analysis methods.
+}
+\examples{
+\dontrun{
+# Basic usage with family data
+results <- HLAhaploTools(
+   filepath = "inst/extdata/family_typing_data.txt",
+   isfamily = TRUE,
+   plot_freq = TRUE,
+   plot_haplotypes = TRUE
+)
+
+# Advanced usage with all options
+results <- HLAhaploTools(
+   filepath = "inst/extdata/family_typing_data.txt",
+   trim = TRUE,
+   resolution = 3,
+   isfamily = TRUE,
+   plot_freq = TRUE,
+   plot_count = TRUE,
+   plot_diversity = TRUE,
+   plot_haplotypes = TRUE,
+   gene = "A",
+   parallel = TRUE,
+   n_workers = 8,
+   quiet = FALSE,
+   mac = TRUE
+)
+
+# Access results
+typing_data <- results$typing_data
+allele_freq <- results$allele_frequencies
+haplotypes <- results$haplotype_frequencies
+}
+
 }
 \seealso{
 Useful links:
@@ -85,7 +138,9 @@ Useful links:
 }
 
 
-\code{\link[=load_typing_data]{load_typing_data()}}, \code{\link[=reformat_typing_data]{reformat_typing_data()}}, \code{\link[=decode_classical_mac]{decode_classical_mac()}}, \code{\link[=infer_haplotypes]{infer_haplotypes()}}
+\code{\link{load_typing_data}}, \code{\link{reformat_typing_data}},
+\code{\link{decode_classical_mac}}, \code{\link{infer_haplotypes}},
+\code{\link{plot_top_haplotypes}}, \code{\link{calculate_hla_frequency}}
 }
 \author{
 \strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au}
