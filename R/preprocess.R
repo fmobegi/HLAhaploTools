@@ -306,7 +306,6 @@ reformat_typing_data <- function(df,
   df
 }
 
-
 # ~~~~~~~~~~~~~~~~~~
 # clean_column_names
 # ~~~~~~~~~~~~~~~~~~

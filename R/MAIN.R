@@ -1,7 +1,7 @@
 # ~~~~~~~~~~~~~~~~~~~~
 # HLAhaploTools()
 # ~~~~~~~~~~~~~~~~~~~~
-#' Run Full HLA Typing Pipeline with Optional Visualization
+#' Run Full HLA Haplotype Analysis Typing Pipeline with Optional Visualization
 #'
 #' A master wrapper that loads HLA typing data from file, detects data format,
 #' applies optional trimming, decodes multi-allele codes (MAC), calculates allele-level
