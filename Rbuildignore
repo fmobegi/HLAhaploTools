@@ -1,0 +1,9 @@
+^renv$
+^renv\.lock$
+^HLAhaploTools\.Rproj$
+^\.Rproj\.user$
+^LICENSE\.md$
+^\.github$
+^codecov\.yml$
+^doc$
+^Meta$
