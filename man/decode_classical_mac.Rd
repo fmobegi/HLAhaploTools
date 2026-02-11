@@ -27,8 +27,8 @@ Uses immunotation to decode multi-allele codes (MAC) in classical HLA loci.
 \dontrun{
 # Decode all classical loci
 typed_data <- load_typing_data("hla_typing.csv") \%>\%
-  reformat_typing_data() \%>\%
-  decode_classical_mac()
+   reformat_typing_data() \%>\%
+   decode_classical_mac()
 
 # Only decode Class I loci
 class1_decoded <- decode_classical_mac(typed_data, loci = c("A", "B", "C"))

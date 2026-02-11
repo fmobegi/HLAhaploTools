@@ -14,8 +14,8 @@
 #' \dontrun{
 #' # Decode all classical loci
 #' typed_data <- load_typing_data("hla_typing.csv") %>%
-#'   reformat_typing_data() %>%
-#'   decode_classical_mac()
+#'    reformat_typing_data() %>%
+#'    decode_classical_mac()
 #'
 #' # Only decode Class I loci
 #' class1_decoded <- decode_classical_mac(typed_data, loci = c("A", "B", "C"))
@@ -24,74 +24,74 @@
 #' @importFrom immunotation decode_MAC
 decode_classical_mac <- function(df,
                                  loci = c(
-                                   "A",
-                                   "B",
-                                   "C",
-                                   "DRB1",
-                                   "DRB3",
-                                   "DRB4",
-                                   "DRB5",
-                                   "DQA1",
-                                   "DQB1",
-                                   "DPA1",
-                                   "DPB1"
+                                    "A",
+                                    "B",
+                                    "C",
+                                    "DRB1",
+                                    "DRB3",
+                                    "DRB4",
+                                    "DRB5",
+                                    "DQA1",
+                                    "DQB1",
+                                    "DPA1",
+                                    "DPB1"
                                  ),
                                  quiet = FALSE) {
-  # Check for immunotation package
-  if (!requireNamespace("immunotation", quietly = TRUE)) {
-    stop(
-      "\t❌ The 'immunotation' package is required. Please install it with BiocManager::install('immunotation')."
-    )
-  }
+   # Check for immunotation package
+   if (!requireNamespace("immunotation", quietly = TRUE)) {
+      stop(
+         "\t❌ The 'immunotation' package is required. Please install it with BiocManager::install('immunotation')."
+      )
+   }
 
-  if (!quiet) {
-    message("\t🔍 Decoding MAC strings in HLA alleles...")
-  }
+   if (!quiet) {
+      message("\t🔍 Decoding MAC strings in HLA alleles...")
+   }
 
-  # Find columns to process
-  allele_cols <- intersect(unlist(lapply(loci, function(l) {
-    paste0(l, c(
-      "_1", "_2"
-    ))
-  })), names(df))
+   # Find columns to process
+   allele_cols <- intersect(unlist(lapply(loci, function(l) {
+      paste0(l, c(
+         "_1", "_2"
+      ))
+   })), names(df))
 
-  if (length(allele_cols) == 0) {
-    warning("\t⚠️ No matching HLA columns found for MAC decoding.")
-    return(df)
-  }
+   if (length(allele_cols) == 0) {
+      warning("\t⚠️ No matching HLA columns found for MAC decoding.")
+      return(df)
+   }
 
-  # MAC pattern
-  mac_pattern <- "^[A-Z0-9]+\\*[0-9]{2}:[A-Z]+$"
-  mac_count <- 0
+   # MAC pattern
+   mac_pattern <- "^[A-Z0-9]+\\*[0-9]{2}:[A-Z]+$"
+   mac_count <- 0
 
-  # Process each column
-  for (col in allele_cols) {
-    df[[col]] <- sapply(df[[col]], function(allele) {
-      if (is.na(allele) || allele == "") {
-        return(allele)
-      }
-      if (grepl(mac_pattern, allele)) {
-        mac_count <<- mac_count + 1
-        tryCatch(
-          immunotation::decode_MAC(allele),
-          error = function(e) {
-            warning(sprintf("\t⚠️ Failed to decode MAC: %s", allele))
+   # Process each column
+   for (col in allele_cols) {
+      df[[col]] <- sapply(df[[col]], function(allele) {
+         if (is.na(allele) || allele == "") {
+            return(allele)
+         }
+         if (grepl(mac_pattern, allele)) {
+            mac_count <<- mac_count + 1
+            tryCatch(
+               immunotation::decode_MAC(allele),
+               error = function(e) {
+                  warning(sprintf("\t⚠️ Failed to decode MAC: %s", allele))
+                  allele
+               }
+            )
+         } else {
             allele
-          }
-        )
+         }
+      })
+   }
+
+   if (!quiet) {
+      if (mac_count > 0) {
+         message(sprintf("\t✅ Decoded %d MAC strings.", mac_count))
       } else {
-        allele
+         message("\tℹ️ No MAC strings found to decode.")
       }
-    })
-  }
+   }
 
-  if (!quiet) {
-    if (mac_count > 0) {
-      message(sprintf("\t✅ Decoded %d MAC strings.", mac_count))
-    } else {
-      message("\tℹ️ No MAC strings found to decode.")
-    }
-  }
-
-  df
+   df
 }

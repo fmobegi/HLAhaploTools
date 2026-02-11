@@ -1,8 +1,10 @@
 Package: HLAhaploTools
 Title: Tools for Inference and Analysis of Extended HLA Haplotypes
 Version: 0.99.0
-Authors@R: 
-    person("Fredrick", "Mobegi", email = "fredrick.mobegi@health.wa.gov.au", role = c("aut", "cre"))
+Authors@R: c(
+    person("Fredrick", "Mobegi", email = "fredrick.mobegi@health.wa.gov.au", role = c("aut", "cre")),
+    person("Hoiley", "Sham", email = "24409393@student.uwa.edu.au", role = c("aut", "cre"))
+    )
 Description: Provides tools for working with extended human leukocyte antigen (HLA) haplotypes, including functions for haplotype construction, visualization, family-based inference, and population-level summaries. Supports both classical and non-classical HLA loci, as well as MICA and MICB genes. Facilitates multi-locus haplotype analysis for use in immunogenetics, transplantation matching, and genetic association studies.
 License: MIT + file LICENSE
 Encoding: UTF-8
@@ -29,6 +31,7 @@ Imports:
     readr,
     readxl,
     scales,
+    stats,
     tibble,
     tidyr,
     tools
