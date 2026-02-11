@@ -31,7 +31,11 @@ Imports:
     readr,
     readxl,
     scales,
+<<<<<<< HEAD
     stats,
+=======
+    stringr,
+>>>>>>> 16f229843919ae2728e989b44b14222b8ad3324c
     tibble,
     tidyr,
     tools
