@@ -259,15 +259,11 @@ HLAhaploTools <- function(filepath,
 
    # Step 9: Haplotype inference
    if (!quiet) message("\n🔄 Step 9: Inferring haplotypes using EM...")
-   haplotype_results <- infer_haplotypes(
-      df = df_decoded,
-      loci = NULL,
-      parallel = parallel,
-      n_workers = n_workers,
-      quiet = quiet,
-      isfamily = family_data_val
+   haplotype_results <- em_algorithm(
+      df_raw = df_decoded,
+      collapse = ",",
+      quiet = quiet
    )
-
    # Step 10: Haplotype plot
    if (plot_haplotypes) {
       if (!quiet) message("\n📊 Step 10: Plotting haplotype frequencies...")

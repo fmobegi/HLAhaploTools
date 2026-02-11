@@ -1,83 +1,83 @@
-#' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#' EM Algorithm
-#' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#' EM Algorithm for Haplotype Reconstruction
 #'
-#' Creates haplotype strings from probability via EM algorithm.
+#' Runs the EM algorithm from **haplo.stats** to infer haplotypes from
+#' multi‑locus HLA genotype data. Produces collapsed haplotype strings,
+#' aggregates probabilities, and returns a tidy tibble summarising
+#' EM‑derived haplotypes.
 #'
-#' Creates haplotype strings for all possibilities and compared with segregation
-#' analysis to determine best matches.
+#' Segregation analysis is considered the ground truth for comparison.
 #'
-#' Segregation analysis is the truth (determines haplotype strings)
+#' @param df_raw A tibble containing family HLA typing data. Expected to
+#'   contain columns of the form `LOCUS_1` and `LOCUS_2` for each locus.
+#' @param collapse A character string used to join allele fields when
+#'   constructing haplotype strings.
 #'
-#' Packages (Haplo.stats, dplyr, furrr, future) must be installed using
-#' install.packages() and load in with library().
+#' @return A tibble with columns:
+#'   * `Haplotype` — collapsed haplotype string
+#'   * `EM_Probability` — summed EM probability
+#'   * `Frequency` — number of EM rows contributing to the haplotype
 #'
-#' @param df_raw A tibble containing family HLA typing data.
-#' Used to find if percentage match is conclusive.
-#' @param collapse Character string used to separate each alleles.
+#' @details
+#' This function:
+#'   1. Normalises allele fields by trimming after `/`
+#'   2. Selects available loci dynamically
+#'   3. Runs `haplo.em()` from **haplo.stats**
+#'   4. Collapses haplotypes into readable strings
+#'   5. Aggregates probabilities and frequencies
 #'
-#' @return A tibble in a long format with index, haplotype strings,
-#' em_probability, numbers of common and different alleles,
-#' percentage match, exact match.
+#' @importFrom dplyr mutate select group_by summarise arrange distinct rowwise ungroup
+#' @importFrom tibble as_tibble
+#' @importFrom stats na.omit
+#' @importFrom haplo.stats haplo.em
 #'
 #' @export
-em_algorithm <- function(df_raw, collapse = ", ") {
+em_algorithm <- function(df_raw, collapse = ", ", quiet = quiet) {
    set.seed(2026)
 
-   # df_raw <- read.delim(
-   #    "family_typing_data.tsv"
-   # )
-   #
-
-   pacman::p_load(haplo.stats, data.table, tidyverse, install = FALSE)
-
-   # Trim MACdecoded datasets and keep only the 1st allele before /
+   # Trim MAC-decoded alleles: keep only the first allele before "/"
    df_decoded_mac <- df_raw %>%
-      mutate(across(everything(), ~ sub("/.*", "", .)))
+      dplyr::mutate(across(everything(), ~ sub("/.*", "", .x)))
 
    loci <- c(
       "F", "G", "H", "A", "J", "C", "B", "E", "MICA", "MICB", "DRB1",
       "DRB4", "DQA1", "DQB1", "DPA1", "DPB1"
    )
 
+   # Keep only loci that exist in df_raw
    loci_check <- loci[sapply(loci, function(loc) {
       paste0(loc, "_1") %in% names(df_raw)
    })]
 
-   length(loci)
-
+   # Build column list LOCUS_1, LOCUS_2
    cols <- as.vector(rbind(
       paste0(loci_check, "_1"),
       paste0(loci_check, "_2")
    ))
 
+   # Prepare matrix for haplo.em()
    df <- df_decoded_mac %>%
-      dplyr::select(all_of(cols)) %>%
-      dplyr::as_tibble() %>%
-      dplyr::mutate(across(everything(), ~ na_if(.x, ""))) %>% # fill missing with NA
+      dplyr::select(dplyr::all_of(cols)) %>%
+      tibble::as_tibble() %>%
+      dplyr::mutate(across(everything(), ~ na_if(.x, ""))) %>%
       as.matrix()
 
-   colSums(is.na(df))
-
+   # Run EM algorithm
    em <- haplo.stats::haplo.em(
       df,
       locus.label = loci_check,
       miss.val = NA
    )
 
-   ## create combined table of haplotype\tProb\tFreq
-   haplotypes <- em$haplotype # haplotype strings
-   hap_probs <- em$hap.prob # probabilities
-
-   hap_df <- data.frame(
-      haplotypes,
-      hap_probs
+   hap_df <- tibble::tibble(
+      haplotypes = em$haplotype,
+      hap_probs  = em$hap.prob
    ) %>%
-      tibble::as_tibble() %>%
       dplyr::rowwise() %>%
       dplyr::mutate(
-         # collapse all non‑NA values with "~" ############################################
-         Haplotype = paste(stats::na.omit(dplyr::c_across(1:(ncol(.) - 1))), collapse = "~")
+         Haplotype = paste(
+            stats::na.omit(dplyr::c_across(1:(ncol(.) - 1))),
+            collapse = "~"
+         )
       ) %>%
       dplyr::ungroup() %>%
       dplyr::select(Haplotype, EM_Probability = hap_probs) %>%
@@ -90,5 +90,5 @@ em_algorithm <- function(df_raw, collapse = ", ") {
       dplyr::arrange(Haplotype, dplyr::desc(EM_Probability)) %>%
       dplyr::distinct()
 
-   print(hap_df) ## for return
+   hap_df
 }
