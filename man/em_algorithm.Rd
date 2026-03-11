@@ -2,31 +2,40 @@
 % Please edit documentation in R/em_algorithm.R
 \name{em_algorithm}
 \alias{em_algorithm}
-\title{\if{html}{\out{<div class="sourceCode">}}\preformatted{EM Algorithm
-}\if{html}{\out{</div>}}}
+\title{EM Algorithm for Haplotype Reconstruction}
 \usage{
-em_algorithm(df_raw, collapse = ", ")
+em_algorithm(df_raw, collapse = ", ", quiet = quiet)
 }
 \arguments{
-\item{df_raw}{A tibble containing family HLA typing data.
-Used to find if percentage match is conclusive.}
+\item{df_raw}{A tibble containing family HLA typing data. Expected to
+contain columns of the form \code{LOCUS_1} and \code{LOCUS_2} for each locus.}
 
-\item{collapse}{Character string used to separate each alleles.}
+\item{collapse}{A character string used to join allele fields when
+constructing haplotype strings.}
 }
 \value{
-A tibble in a long format with index, haplotype strings,
-em_probability, numbers of common and different alleles,
-percentage match, exact match.
+A tibble with columns:
+\itemize{
+\item \code{Haplotype} — collapsed haplotype string
+\item \code{EM_Probability} — summed EM probability
+\item \code{Frequency} — number of EM rows contributing to the haplotype
+}
 }
 \description{
-Creates haplotype strings from probability via EM algorithm.
+Runs the EM algorithm from \strong{haplo.stats} to infer haplotypes from
+multi‑locus HLA genotype data. Produces collapsed haplotype strings,
+aggregates probabilities, and returns a tidy tibble summarising
+EM‑derived haplotypes.
 }
 \details{
-Creates haplotype strings for all possibilities and compared with segregation
-analysis to determine best matches.
+Segregation analysis is considered the ground truth for comparison.
 
-Segregation analysis is the truth (determines haplotype strings)
-
-Packages (Haplo.stats, dplyr, furrr, future) must be installed using
-install.packages() and load in with library().
+This function:
+\enumerate{
+\item Normalises allele fields by trimming after \code{/}
+\item Selects available loci dynamically
+\item Runs \code{haplo.em()} from \strong{haplo.stats}
+\item Collapses haplotypes into readable strings
+\item Aggregates probabilities and frequencies
+}
 }

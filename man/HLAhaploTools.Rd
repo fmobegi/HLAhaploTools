@@ -105,27 +105,27 @@ or population/registry data and applies appropriate analysis methods.
 \dontrun{
 # Basic usage with family data
 results <- HLAhaploTools(
-  filepath = "inst/extdata/family_typing_data.txt",
-  isfamily = TRUE,
-  plot_freq = TRUE,
-  plot_haplotypes = TRUE
+   filepath = "inst/extdata/family_typing_data.txt",
+   isfamily = TRUE,
+   plot_freq = TRUE,
+   plot_haplotypes = TRUE
 )
 
 # Advanced usage with all options
 results <- HLAhaploTools(
-  filepath = "inst/extdata/family_typing_data.txt",
-  trim = FALSE,
-  resolution = 3,
-  isfamily = TRUE,
-  plot_freq = TRUE,
-  plot_count = TRUE,
-  plot_diversity = TRUE,
-  plot_haplotypes = TRUE,
-  gene = "A",
-  parallel = TRUE,
-  n_workers = 8,
-  quiet = FALSE,
-  mac = TRUE
+   filepath = "inst/extdata/family_typing_data.txt",
+   trim = FALSE,
+   resolution = 3,
+   isfamily = TRUE,
+   plot_freq = TRUE,
+   plot_count = TRUE,
+   plot_diversity = TRUE,
+   plot_haplotypes = TRUE,
+   gene = "A",
+   parallel = TRUE,
+   n_workers = 8,
+   quiet = FALSE,
+   mac = TRUE
 )
 
 # Access results

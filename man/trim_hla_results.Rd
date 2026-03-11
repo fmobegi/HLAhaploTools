@@ -30,7 +30,7 @@ NA values and empty strings are preserved, and trimming failures are gracefully 
 \dontrun{
 # Load and trim alleles to 2-field resolution
 typed_data <- load_typing_data("hla_typing.csv") \%>\%
-  reformat_typing_data() \%>\%
-  trim_hla_results(resolution = 2)
+   reformat_typing_data() \%>\%
+   trim_hla_results(resolution = 2)
 }
 }

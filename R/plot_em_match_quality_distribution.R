@@ -14,10 +14,14 @@
 #' @importFrom dplyr group_by summarise mutate n
 #' @importFrom ggplot2 ggplot aes geom_col geom_text scale_fill_manual labs
 #' @importFrom ggplot2 theme_minimal theme element_text element_blank ylim
-#' @importFrom stats max
 #'
 #' @keywords internal
 plot_em_match_quality_distribution <- function(comparison_df) {
+   # Defensive check: ensure match_quality exists
+   if (!"match_quality" %in% names(comparison_df)) {
+      stop("comparison_df must contain a 'match_quality' column.")
+   }
+
    match_summary <- comparison_df %>%
       dplyr::group_by(match_quality) %>%
       dplyr::summarise(

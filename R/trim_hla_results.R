@@ -20,8 +20,8 @@
 #' \dontrun{
 #' # Load and trim alleles to 2-field resolution
 #' typed_data <- load_typing_data("hla_typing.csv") %>%
-#'   reformat_typing_data() %>%
-#'   trim_hla_results(resolution = 2)
+#'    reformat_typing_data() %>%
+#'    trim_hla_results(resolution = 2)
 #' }
 #' @importFrom HLAtools multiAlleleTrim
 #' @importFrom tibble as_tibble
@@ -31,109 +31,109 @@ trim_hla_results <- function(df,
                              resolution = 3,
                              append = TRUE,
                              quiet = FALSE) {
-  # Check for HLAtools package
-  if (!requireNamespace("HLAtools", quietly = TRUE)) {
-    stop(
-      "\t❌ The 'HLAtools' package is required. Please install it from GitHub: remotes::install_github('DKMS/HLAtools')"
-    )
-  }
+   # Check for HLAtools package
+   if (!requireNamespace("HLAtools", quietly = TRUE)) {
+      stop(
+         "\t❌ The 'HLAtools' package is required. Please install it from GitHub: remotes::install_github('DKMS/HLAtools')"
+      )
+   }
 
-  if (!quiet) {
-    message(sprintf("\t✂️ Trimming alleles to %d-field resolution...", resolution))
-  }
+   if (!quiet) {
+      message(sprintf("\t✂️ Trimming alleles to %d-field resolution...", resolution))
+   }
 
-  # Count of trimmed alleles for reporting
-  trim_count <- 0
-  fail_count <- 0
-  mac_count <- 0
+   # Count of trimmed alleles for reporting
+   trim_count <- 0
+   fail_count <- 0
+   mac_count <- 0
 
-  # Apply trimming to each column
-  df[] <- lapply(df, function(col) {
-    if (!is.character(col)) {
-      return(col)
-    }
-
-    sapply(col, function(allele) {
-      if (is.na(allele) || allele == "") {
-        return(allele)
+   # Apply trimming to each column
+   df[] <- lapply(df, function(col) {
+      if (!is.character(col)) {
+         return(col)
       }
 
-      # Check if this is a MAC-decoded allele containing "/"
-      if (grepl("/", allele)) {
-        mac_count <<- mac_count + 1
+      sapply(col, function(allele) {
+         if (is.na(allele) || allele == "") {
+            return(allele)
+         }
 
-        # Split by "/" and trim each component
-        components <- unlist(strsplit(allele, "/"))
-        trimmed_components <- sapply(components, function(component) {
-          tryCatch(
+         # Check if this is a MAC-decoded allele containing "/"
+         if (grepl("/", allele)) {
+            mac_count <<- mac_count + 1
+
+            # Split by "/" and trim each component
+            components <- unlist(strsplit(allele, "/"))
+            trimmed_components <- sapply(components, function(component) {
+               tryCatch(
+                  {
+                     trimmed <- HLAtools::multiAlleleTrim(component,
+                        resolution = resolution,
+                        append = append
+                     )
+                     trim_count <<- trim_count + 1
+                     return(trimmed)
+                  },
+                  error = function(e) {
+                     fail_count <<- fail_count + 1
+                     if (!quiet) {
+                        message(
+                           sprintf(
+                              "\t⚠️ Trimming failed for '%s' in MAC-decoded string — keeping original.",
+                              component
+                           )
+                        )
+                     }
+                     return(component)
+                  }
+               )
+            })
+
+            # Recombine with "/"
+            return(paste(trimmed_components, collapse = "/"))
+         }
+
+         # Regular allele (no MAC decoding)
+         tryCatch(
             {
-              trimmed <- HLAtools::multiAlleleTrim(component,
-                resolution = resolution,
-                append = append
-              )
-              trim_count <<- trim_count + 1
-              return(trimmed)
+               trimmed <- HLAtools::multiAlleleTrim(allele, resolution = resolution, append = append)
+               trim_count <<- trim_count + 1
+               return(trimmed)
             },
             error = function(e) {
-              fail_count <<- fail_count + 1
-              if (!quiet) {
-                message(
-                  sprintf(
-                    "\t⚠️ Trimming failed for '%s' in MAC-decoded string — keeping original.",
-                    component
-                  )
-                )
-              }
-              return(component)
+               fail_count <<- fail_count + 1
+               if (!quiet) {
+                  message(sprintf(
+                     "\t⚠️ Trimming failed for '%s' — keeping original.",
+                     allele
+                  ))
+               }
+               return(allele)
             }
-          )
-        })
+         )
+      })
+   })
 
-        # Recombine with "/"
-        return(paste(trimmed_components, collapse = "/"))
-      }
-
-      # Regular allele (no MAC decoding)
-      tryCatch(
-        {
-          trimmed <- HLAtools::multiAlleleTrim(allele, resolution = resolution, append = append)
-          trim_count <<- trim_count + 1
-          return(trimmed)
-        },
-        error = function(e) {
-          fail_count <<- fail_count + 1
-          if (!quiet) {
-            message(sprintf(
-              "\t⚠️ Trimming failed for '%s' — keeping original.",
-              allele
-            ))
-          }
-          return(allele)
-        }
-      )
-    })
-  })
-
-  if (!quiet) {
-    message(
-      sprintf(
-        "\t✅ Trimmed %d alleles to %d-field resolution.",
-        trim_count - fail_count,
-        resolution
-      )
-    )
-    if (mac_count > 0) {
+   if (!quiet) {
       message(
-        sprintf(
-          "\t🧩 Processed %d MAC-decoded alleles with multiple options.",
-          mac_count
-        )
+         sprintf(
+            "\t✅ Trimmed %d alleles to %d-field resolution.",
+            trim_count - fail_count,
+            resolution
+         )
       )
-    }
-    if (fail_count > 0) {
-      message(sprintf("\t⚠️ %d alleles could not be trimmed properly.", fail_count))
-    }
-  }
-  df <- tibble::as_tibble(df)
-  df
+      if (mac_count > 0) {
+         message(
+            sprintf(
+               "\t🧩 Processed %d MAC-decoded alleles with multiple options.",
+               mac_count
+            )
+         )
+      }
+      if (fail_count > 0) {
+         message(sprintf("\t⚠️ %d alleles could not be trimmed properly.", fail_count))
+      }
+   }
+   df <- tibble::as_tibble(df)
+   df
 }

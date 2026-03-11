@@ -36,82 +36,82 @@ load_typing_data <- function(filepath,
                              quiet = FALSE,
                              max_file_mb = 100,
                              ...) {
-  # Check file existence
-  if (!file.exists(filepath)) {
-    stop("\t❌ File does not exist: ", filepath)
-  }
+   # Check file existence
+   if (!file.exists(filepath)) {
+      stop("\t❌ File does not exist: ", filepath)
+   }
 
-  # Check file size
-  file_size_mb <- file.info(filepath)$size / 1024^2
-  if (file_size_mb > max_file_mb) {
-    warning(sprintf(
-      "\t⚠️ Large file detected (%.1f MB). Loading may take time.",
-      file_size_mb
-    ))
-  }
+   # Check file size
+   file_size_mb <- file.info(filepath)$size / 1024^2
+   if (file_size_mb > max_file_mb) {
+      warning(sprintf(
+         "\t⚠️ Large file detected (%.1f MB). Loading may take time.",
+         file_size_mb
+      ))
+   }
 
-  ext <- tolower(tools::file_ext(filepath))
-  na_values <- c("", NULL, NA, "NULL", "NA", "Unknown")
+   ext <- tolower(tools::file_ext(filepath))
+   na_values <- c("", NULL, NA, "NULL", "NA", "Unknown")
 
-  if (!quiet) {
-    message(sprintf("\t📦 Detected file type: .%s", ext))
-  }
+   if (!quiet) {
+      message(sprintf("\t📦 Detected file type: .%s", ext))
+   }
 
-  safe_read <- function(read_fun, ...) {
-    tryCatch(
-      {
-        df <- read_fun(..., na = na_values)
+   safe_read <- function(read_fun, ...) {
+      tryCatch(
+         {
+            df <- read_fun(..., na = na_values)
 
-        if (!quiet) {
-          message(sprintf(
-            "\t✅ Loaded file with %d rows and %d columns.",
-            nrow(df),
-            ncol(df)
-          ))
-        }
+            if (!quiet) {
+               message(sprintf(
+                  "\t✅ Loaded file with %d rows and %d columns.",
+                  nrow(df),
+                  ncol(df)
+               ))
+            }
 
-        return(df)
-      },
-      error = function(e) {
-        stop("\t❌ Failed to load file: ", e$message)
-      }
-    )
-  }
+            return(df)
+         },
+         error = function(e) {
+            stop("\t❌ Failed to load file: ", e$message)
+         }
+      )
+   }
 
-  df <- switch(ext,
-    "csv" = safe_read(
-      readr::read_csv,
-      file = filepath,
-      col_types = readr::cols(.default = "c"),
-      ...
-    ),
-    "tsv" = safe_read(
-      readr::read_tsv,
-      file = filepath,
-      col_types = readr::cols(.default = "c"),
-      ...
-    ),
-    "txt" = safe_read(
-      readr::read_tsv,
-      file = filepath,
-      col_types = readr::cols(.default = "c"),
-      ...
-    ),
-    "xlsx" = safe_read(
-      readxl::read_excel,
-      path = filepath,
-      sheet = sheet,
-      col_types = "text",
-      ...
-    ),
-    "rds" = safe_read(readRDS, file = filepath, ...),
-    stop(
-      "\t❌ Unsupported file extension: ",
-      ext,
-      ". Use .csv, .tsv, .txt, .xlsx, or .rds instead."
-    )
-  )
+   df <- switch(ext,
+      "csv" = safe_read(
+         readr::read_csv,
+         file = filepath,
+         col_types = readr::cols(.default = "c"),
+         ...
+      ),
+      "tsv" = safe_read(
+         readr::read_tsv,
+         file = filepath,
+         col_types = readr::cols(.default = "c"),
+         ...
+      ),
+      "txt" = safe_read(
+         readr::read_tsv,
+         file = filepath,
+         col_types = readr::cols(.default = "c"),
+         ...
+      ),
+      "xlsx" = safe_read(
+         readxl::read_excel,
+         path = filepath,
+         sheet = sheet,
+         col_types = "text",
+         ...
+      ),
+      "rds" = safe_read(readRDS, file = filepath, ...),
+      stop(
+         "\t❌ Unsupported file extension: ",
+         ext,
+         ". Use .csv, .tsv, .txt, .xlsx, or .rds instead."
+      )
+   )
 
-  df <- tibble::as_tibble(df)
-  df
+   df <- tibble::as_tibble(df)
+   df
 }
