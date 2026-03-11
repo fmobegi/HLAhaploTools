@@ -147,7 +147,12 @@ Useful links:
 \code{\link{decode_classical_mac}}, \code{\link{infer_haplotypes}}
 }
 \author{
-\strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au}
+\strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au} (fmobegi)
+
+Authors:
+\itemize{
+  \item Hoiley Sham \email{24409393@student.uwa.edu.au} (h-sham)
+}
 
 }
 \keyword{package}
