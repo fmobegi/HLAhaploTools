@@ -83,7 +83,22 @@ reformat_typing_data <- function(df,
 
    # Step 4: Fill missing second alleles + DRB1-DRB3/4/5 linkage compliance
    fill_result <- fill_missing_alleles(df, id_cols = id_cols, quiet = quiet)
-   df <- fill_result$cleaned
+
+   df <- fill_result$cleaned %>%
+      dplyr::mutate(
+         dplyr::across(
+            .cols = everything(),
+            .fns  = keep_first_two_slash
+         )
+      ) %>%
+      dplyr::mutate(
+         dplyr::across(
+            .cols = everything(),
+            .fns = ~ strsplit(as.character(.x), "/", fixed = TRUE)
+         )
+      ) %>%
+      tidyr::unnest(., cols = everything())
+
    qc <- fill_result$qc
 
    # Step 5: Organize columns and sort
@@ -97,4 +112,16 @@ reformat_typing_data <- function(df,
    }
 
    df
+}
+
+keep_first_two_slash <- function(x) {
+   ifelse(
+      is.na(x) | x == "",
+      x,
+      vapply(
+         strsplit(as.character(x), "/", fixed = TRUE),
+         function(parts) paste(parts[seq_len(min(2, length(parts)))], collapse = "/"),
+         FUN.VALUE = character(1)
+      )
+   )
 }
