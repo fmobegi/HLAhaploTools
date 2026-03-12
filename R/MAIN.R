@@ -9,29 +9,19 @@
 #' and optionally generates plots. Supports both family and registry/population-based studies.
 #'
 #' @param filepath Character. Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).
-#' @param trim Logical. If TRUE, applies `trim_hla_results()` to standardize allele
-#'   resolution. Default is FALSE.
-#' @param resolution Integer. Desired resolution for allele trimming. Default is 3.
-#' @param isfamily Logical or NULL. If NULL (default), auto-detects data format.
-#'   If TRUE, treats input as family data.
-#' @param mac Logical. If TRUE, decode multi-allele codes using `decode_classical_mac()`.
-#'   Default is TRUE.
-#' @param plot_freq Logical. If TRUE, generates allele frequency plot. Default is FALSE.
+#' @param trim Logical. If TRUE, applies trim_hla_results() to standardize allele resolution.
+#' @param resolution Integer. Desired resolution for allele trimming.
+#' @param isfamily Logical or NULL. If NULL, auto-detects data format; if TRUE, treats input as family data.
+#' @param mac Logical. If TRUE, decode multi-allele codes using decode_classical_mac().
+#' @param plot_freq Logical. If TRUE, generates allele frequency plot.
 #' @param plot_count Logical. If TRUE, plots unique allele counts across loci.
-#'   Default is FALSE.
-#' @param plot_diversity Logical. If TRUE, plots diversity across populations for
-#'   selected gene(s). Default is FALSE.
+#' @param plot_diversity Logical. If TRUE, plots diversity across populations for selected gene(s).
 #' @param plot_haplotypes Logical. If TRUE, plots top inferred haplotype frequencies.
-#'   Default is FALSE.
-#' @param gene Character vector. Genes to use for diversity plotting. Default is "A".
+#' @param gene Character vector. Genes to use for diversity plotting.
 #' @param parallel Logical. If TRUE, uses parallelization for EM haplotype inference.
-#'   Default is TRUE.
-#' @param n_workers Integer or NULL. Number of parallel workers. If NULL, uses
-#'   `availableCores()`. Default is NULL.
-#' @param sheet Character or integer. Sheet name or index to use when reading Excel
-#'   files. Optional.
+#' @param n_workers Integer or NULL. Number of parallel workers; if NULL, uses availableCores().
+#' @param sheet Character or integer. Sheet name or index when reading Excel files.
 #' @param quiet Logical. If TRUE, suppresses progress and status messaging.
-#'   Default is FALSE.
 #'
 #' @return A named list with the following components:
 #' \describe{

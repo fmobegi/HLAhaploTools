@@ -27,41 +27,31 @@ HLAhaploTools(
 \arguments{
 \item{filepath}{Character. Path to the input HLA typing file (.csv, .tsv, .txt, .xlsx).}
 
-\item{trim}{Logical. If TRUE, applies \code{trim_hla_results()} to standardize allele
-resolution. Default is FALSE.}
+\item{trim}{Logical. If TRUE, applies trim_hla_results() to standardize allele resolution.}
 
-\item{resolution}{Integer. Desired resolution for allele trimming. Default is 3.}
+\item{resolution}{Integer. Desired resolution for allele trimming.}
 
-\item{isfamily}{Logical or NULL. If NULL (default), auto-detects data format.
-If TRUE, treats input as family data.}
+\item{isfamily}{Logical or NULL. If NULL, auto-detects data format; if TRUE, treats input as family data.}
 
-\item{mac}{Logical. If TRUE, decode multi-allele codes using \code{decode_classical_mac()}.
-Default is TRUE.}
+\item{mac}{Logical. If TRUE, decode multi-allele codes using decode_classical_mac().}
 
-\item{plot_freq}{Logical. If TRUE, generates allele frequency plot. Default is FALSE.}
+\item{plot_freq}{Logical. If TRUE, generates allele frequency plot.}
 
-\item{plot_count}{Logical. If TRUE, plots unique allele counts across loci.
-Default is FALSE.}
+\item{plot_count}{Logical. If TRUE, plots unique allele counts across loci.}
 
-\item{plot_diversity}{Logical. If TRUE, plots diversity across populations for
-selected gene(s). Default is FALSE.}
+\item{plot_diversity}{Logical. If TRUE, plots diversity across populations for selected gene(s).}
 
-\item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies.
-Default is FALSE.}
+\item{plot_haplotypes}{Logical. If TRUE, plots top inferred haplotype frequencies.}
 
-\item{gene}{Character vector. Genes to use for diversity plotting. Default is "A".}
+\item{gene}{Character vector. Genes to use for diversity plotting.}
 
-\item{parallel}{Logical. If TRUE, uses parallelization for EM haplotype inference.
-Default is TRUE.}
+\item{parallel}{Logical. If TRUE, uses parallelization for EM haplotype inference.}
 
-\item{n_workers}{Integer or NULL. Number of parallel workers. If NULL, uses
-\code{availableCores()}. Default is NULL.}
+\item{n_workers}{Integer or NULL. Number of parallel workers; if NULL, uses availableCores().}
 
-\item{sheet}{Character or integer. Sheet name or index to use when reading Excel
-files. Optional.}
+\item{sheet}{Character or integer. Sheet name or index when reading Excel files.}
 
-\item{quiet}{Logical. If TRUE, suppresses progress and status messaging.
-Default is FALSE.}
+\item{quiet}{Logical. If TRUE, suppresses progress and status messaging.}
 }
 \value{
 A named list with the following components:
