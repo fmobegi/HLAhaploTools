@@ -140,13 +140,22 @@ fill_missing_alleles <- function(df, id_cols = NULL, quiet = FALSE) {
       )
 
       extract_group <- function(allele) {
+         # NULL-safe guard
+         if (is.null(allele)) {
+            return(NA_character_)
+         }
+
+         # NA or empty
          if (is.na(allele) || allele == "") {
-            return(NA)
+            return(NA_character_)
          }
+
+         # Extract 2-digit DRB1 group
          m <- regmatches(allele, regexpr("\\*(\\d{2})", allele))
-         if (length(m) == 0) {
-            return(NA)
+         if (length(m) == 0 || is.na(m)) {
+            return(NA_character_)
          }
+
          sub("\\*", "", m)
       }
 
