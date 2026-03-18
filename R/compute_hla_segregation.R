@@ -1,42 +1,45 @@
 #' Compute HLA haplotype segregation within families
 #'
-#' Phase HLA alleles into transmitted haplotypes for each child in a pedigree.
-#' The function supports:
-#' - complete trios (father, mother, children),
-#' - single-parent families with three or more children (inference mode),
-#' - multi-locus HLA data where each locus is represented by two allele columns
-#'   (e.g., A_1, A_2).
+#' This function phases multi‑locus HLA alleles into transmitted paternal and
+#' maternal haplotypes for each child in a pedigree. It supports:
 #'
-#' Haplotype labels (stable per parent across all children):
-#' - **A**: paternal haplotype 1
-#' - **B**: paternal haplotype 2
-#' - **C**: maternal haplotype 1
-#' - **D**: maternal haplotype 2
+#' • Complete trios (father, mother, ≥1 child)
+#' • Single‑parent families with ≥3 children (inference mode)
+#' • Multi‑locus HLA data where each locus has two allele columns
+#'   (e.g., `A_1`, `A_2`, `B_1`, `B_2`, etc.)
 #'
-#' Only the **two transmitted haplotypes** (one paternal, one maternal) are
-#' returned for each child.
+#' ## Haplotype labelling (AC anchoring)
 #'
-#' When one parent is missing and there are at least three children, the missing
-#' parent's alleles are inferred by subtracting the known parent's alleles from
-#' the union of child alleles at each locus.
+#' • **Child 1** defines the canonical haplotypes:
+#'   – Paternal haplotype → **A**
+#'   – Maternal haplotype → **C**
+#'
+#' • For all subsequent children:
+#'   – If their paternal haplotype matches Child 1 → **A**, else **B**
+#'   – If their maternal haplotype matches Child 1 → **C**, else **D**
+#'
+#' This yields the four possible transmitted haplotype combinations:
+#' **AC**, **AD**, **BC**, **BD**.
+#'
+#' ## Missing‑parent inference
+#'
+#' When one parent is missing and ≥3 children are present, the missing parent's
+#' alleles are inferred locus‑by‑locus by subtracting the known parent's alleles
+#' from the union of child alleles.
 #'
 #' @param hped A data frame containing pedigree and HLA allele columns. Must
-#'   include `FAMILY_ID` and `Family_Member`. Allele columns should follow the
+#'   include `FAMILY_ID` and `Family_Member`. Allele columns must follow the
 #'   pattern `<Locus>_1` and `<Locus>_2`.
 #' @param collapse Character scalar used to join alleles into a haplotype
-#'   string (default: `"~"`).
-#' @param verbose Logical; if `TRUE` prints progress messages (default: `TRUE`).
+#'   string. Default is `"~"`.
+#' @param verbose Logical; if `TRUE`, prints progress messages.
 #'
-#' @return A tibble with columns:
-#'   - `FAMILY_ID`
-#'   - `Child_ID`
-#'   - `Haplotype` (one of `A`, `B`, `C`, `D`)
-#'   - `Allele_string` (collapsed haplotype string)
+#' @return A tibble with one paternal and one maternal haplotype per child.
 #'
-#' @details
-#' Parental haplotypes (A/B for father, C/D for mother) are constructed once per
-#' family and reused for all children. For each child, only the transmitted
-#' paternal and maternal haplotypes are returned.
+#' @importFrom dplyr filter slice bind_rows
+#' @importFrom purrr keep
+#' @importFrom janitor clean_names
+#' @importFrom tibble tibble
 #'
 #' @export
 compute_hla_segregation <- function(hped, collapse = "~", verbose = TRUE) {
@@ -44,6 +47,7 @@ compute_hla_segregation <- function(hped, collapse = "~", verbose = TRUE) {
    stopifnot(all(required %in% colnames(hped)))
 
    hped <- janitor::clean_names(hped, case = "none")
+   hped$Family_Member <- as.character(hped$Family_Member)
 
    genes <- c(
       "F", "G", "H", "A", "J", "C", "B", "E",
@@ -62,211 +66,129 @@ compute_hla_segregation <- function(hped, collapse = "~", verbose = TRUE) {
       purrr::keep(vals, ~ !is.na(.) && . != "")
    }
 
+   make_string <- function(x) {
+      x <- x[!is.na(x) & x != ""]
+      if (length(x) == 0) {
+         return(NA_character_)
+      }
+      paste(x, collapse = collapse)
+   }
+
    results <- list()
    families <- unique(hped$FAMILY_ID)
 
    for (fam in families) {
-      tryCatch(
-         {
-            if (verbose) message("\tProcessing: ", fam, " ...")
+      if (verbose) message("Processing: ", fam)
 
-            fam_rows <- dplyr::filter(hped, FAMILY_ID == fam)
+      fam_rows <- dplyr::filter(hped, FAMILY_ID == fam)
 
-            father_row <- fam_rows %>%
-               dplyr::filter(tolower(Family_Member) %in%
-                  c("father", "f", "dad", "d", "paternal", "p")) %>%
-               dplyr::slice(1)
+      father_row <- fam_rows %>%
+         dplyr::filter(tolower(Family_Member) %in% c("f", "father", "dad", "paternal", "p")) %>%
+         dplyr::slice(1)
 
-            mother_row <- fam_rows %>%
-               dplyr::filter(tolower(Family_Member) %in%
-                  c("mother", "m", "mom", "mum", "maternal")) %>%
-               dplyr::slice(1)
+      mother_row <- fam_rows %>%
+         dplyr::filter(tolower(Family_Member) %in% c("m", "mother", "mum", "maternal")) %>%
+         dplyr::slice(1)
 
-            children_row <- fam_rows %>%
-               dplyr::filter(tolower(Family_Member) %in%
-                  c(
-                     "child", "child1", "child2", "child3",
-                     "c", "c1", "c2", "c3",
-                     "children", "children1", "children2", "children3"
-                  ))
+      children_row <- fam_rows %>%
+         dplyr::filter(grepl("^c", tolower(Family_Member)))
 
-            has_father <- nrow(father_row) > 0
-            has_mother <- nrow(mother_row) > 0
-            has_children <- nrow(children_row) > 0
-            enough_children <- nrow(children_row) >= 3
+      if (nrow(children_row) == 0) next
 
-            if (!has_children) {
-               warning("\t", fam, " - No children found")
-               next
-            }
+      # Precompute father AB and mother CD (unordered)
+      father_haps <- list(A = list(), B = list())
+      mother_haps <- list(C = list(), D = list())
 
-            # --- Inference mode for missing parent --------------------------------
-            if (!(has_father && has_mother)) {
-               if (verbose) message("\t", fam, " - Single parent detected")
+      for (locus in loci) {
+         f <- allele_pairs(father_row, locus)
+         m <- allele_pairs(mother_row, locus)
 
-               if (!enough_children) {
-                  warning("\t", fam, " - Need 3+ children for inference.")
-                  next
-               }
+         father_haps$A[[locus]] <- f[1]
+         father_haps$B[[locus]] <- ifelse(length(f) == 2, f[2], f[1])
 
-               if (!has_father && has_mother) {
-                  if (verbose) message("\t-> Inferring father ...")
+         mother_haps$C[[locus]] <- m[1]
+         mother_haps$D[[locus]] <- ifelse(length(m) == 2, m[2], m[1])
+      }
 
-                  father_row <- fam_rows[1, , drop = FALSE]
-                  father_row[1, ] <- ""
-                  father_row$FAMILY_ID <- fam
-                  father_row$Family_Member <- "Father (inferred)"
+      child1_pat <- NULL
+      child1_mat <- NULL
 
-                  for (locus in loci) {
-                     mother_alleles <- allele_pairs(mother_row, locus)
+      # Process each child
+      for (i in seq_len(nrow(children_row))) {
+         child <- children_row[i, , drop = FALSE]
+         child_ID <- child$Family_Member
 
-                     all_child_alleles <- children_row %>%
-                        dplyr::rowwise() %>%
-                        dplyr::summarise(alleles = list(allele_pairs(cur_data(), locus))) %>%
-                        dplyr::pull(alleles) %>%
-                        unlist() %>%
-                        unique()
+         pat <- list()
+         mat <- list()
 
-                     father_alleles <- setdiff(all_child_alleles, mother_alleles)
+         for (locus in loci) {
+            f_alleles <- allele_pairs(father_row, locus)
+            m_alleles <- allele_pairs(mother_row, locus)
+            c_alleles <- allele_pairs(child, locus)
 
-                     if (length(father_alleles) >= 1) {
-                        father_row[[paste0(locus, "_1")]] <- father_alleles[1]
-                     }
-                     if (length(father_alleles) >= 2) {
-                        father_row[[paste0(locus, "_2")]] <- father_alleles[2]
-                     } else if (length(father_alleles) == 1) {
-                        father_row[[paste0(locus, "_2")]] <- father_alleles[1]
-                     }
-                  }
-               } else if (has_father && !has_mother) {
-                  if (verbose) message("\t-> Inferring mother ...")
+            if (length(c_alleles) == 0) next
 
-                  mother_row <- fam_rows[1, , drop = FALSE]
-                  mother_row[1, ] <- ""
-                  mother_row$FAMILY_ID <- fam
-                  mother_row$Family_Member <- "Mother (inferred)"
+            pat_unique <- setdiff(intersect(f_alleles, c_alleles), m_alleles)
+            mat_unique <- setdiff(intersect(m_alleles, c_alleles), f_alleles)
 
-                  for (locus in loci) {
-                     father_alleles <- allele_pairs(father_row, locus)
-
-                     all_child_alleles <- children_row %>%
-                        dplyr::rowwise() %>%
-                        dplyr::summarise(alleles = list(allele_pairs(cur_data(), locus))) %>%
-                        dplyr::pull(alleles) %>%
-                        unlist() %>%
-                        unique()
-
-                     mother_alleles <- setdiff(all_child_alleles, father_alleles)
-
-                     if (length(mother_alleles) >= 1) {
-                        mother_row[[paste0(locus, "_1")]] <- mother_alleles[1]
-                     }
-                     if (length(mother_alleles) >= 2) {
-                        mother_row[[paste0(locus, "_2")]] <- mother_alleles[2]
-                     } else if (length(mother_alleles) == 1) {
-                        mother_row[[paste0(locus, "_2")]] <- mother_alleles[1]
-                     }
-                  }
-               }
-            }
-
-            # --- PRECOMPUTE PARENTAL HAPLOTYPES (A/B for father, C/D for mother) ---
-            parent_haps <- list(
-               father = list(A = list(), B = list()),
-               mother = list(C = list(), D = list())
-            )
-
-            for (locus in loci) {
-               f_alleles <- allele_pairs(father_row, locus)
-               m_alleles <- allele_pairs(mother_row, locus)
-
-               # Father
-               if (length(f_alleles) == 2) {
-                  parent_haps$father$A[[locus]] <- f_alleles[1]
-                  parent_haps$father$B[[locus]] <- f_alleles[2]
-               } else if (length(f_alleles) == 1) {
-                  parent_haps$father$A[[locus]] <- f_alleles[1]
-                  parent_haps$father$B[[locus]] <- f_alleles[1]
-               }
-
-               # Mother
-               if (length(m_alleles) == 2) {
-                  parent_haps$mother$C[[locus]] <- m_alleles[1]
-                  parent_haps$mother$D[[locus]] <- m_alleles[2]
-               } else if (length(m_alleles) == 1) {
-                  parent_haps$mother$C[[locus]] <- m_alleles[1]
-                  parent_haps$mother$D[[locus]] <- m_alleles[1]
-               }
-            }
-
-            # --- PROCESS EACH CHILD ------------------------------------------------
-            for (i in seq_len(nrow(children_row))) {
-               child_row <- children_row[i, , drop = FALSE]
-               child_ID <- child_row$Family_Member
-
-               child_all <- unlist(lapply(loci, function(l) allele_pairs(child_row, l)))
-
-               patA <- unlist(parent_haps$father$A)
-               patB <- unlist(parent_haps$father$B)
-               matC <- unlist(parent_haps$mother$C)
-               matD <- unlist(parent_haps$mother$D)
-
-               paternal_hap <- if (all(patA %in% child_all)) {
-                  "A"
-               } else if (all(patB %in% child_all)) {
-                  "B"
+            if (i == 1) {
+               # CHILD 1: PURE MENDELIAN ONLY — NO FALLBACK
+               if (length(pat_unique) == 1 && length(c_alleles) == 2) {
+                  pat[[locus]] <- pat_unique[1]
+                  mat[[locus]] <- setdiff(c_alleles, pat_unique)[1]
+               } else if (length(mat_unique) == 1 && length(c_alleles) == 2) {
+                  mat[[locus]] <- mat_unique[1]
+                  pat[[locus]] <- setdiff(c_alleles, mat_unique)[1]
                } else {
-                  NA
+                  # ambiguous → use child's own alleles directly
+                  pat[[locus]] <- c_alleles[1]
+                  mat[[locus]] <- c_alleles[2]
                }
-
-               maternal_hap <- if (all(matC %in% child_all)) {
-                  "C"
-               } else if (all(matD %in% child_all)) {
-                  "D"
+            } else {
+               # CHILD 2+: full logic with fallback
+               if (length(pat_unique) == 1 && length(c_alleles) == 2) {
+                  pat[[locus]] <- pat_unique[1]
+                  mat[[locus]] <- setdiff(c_alleles, pat_unique)[1]
+               } else if (length(mat_unique) == 1 && length(c_alleles) == 2) {
+                  mat[[locus]] <- mat_unique[1]
+                  pat[[locus]] <- setdiff(c_alleles, mat_unique)[1]
                } else {
-                  NA
-               }
-
-               # Build strings
-               make_string <- function(x) {
-                  if (length(x) == 0) {
-                     return(NA_character_)
-                  }
-                  paste(x, collapse = collapse)
-               }
-
-               A_str <- make_string(patA)
-               B_str <- make_string(patB)
-               C_str <- make_string(matC)
-               D_str <- make_string(matD)
-
-               result_child <- tibble::tibble(
-                  FAMILY_ID = fam,
-                  Child_ID = child_ID,
-                  Haplotype = c(paternal_hap, maternal_hap),
-                  Allele_string = c(
-                     if (paternal_hap == "A") A_str else B_str,
-                     if (maternal_hap == "C") C_str else D_str
+                  pat[[locus]] <- ifelse(father_haps$A[[locus]] %in% c_alleles,
+                     father_haps$A[[locus]],
+                     father_haps$B[[locus]]
                   )
-               ) %>% dplyr::filter(!is.na(Haplotype))
 
-               results[[paste(fam, child_ID, sep = "__")]] <- result_child
+                  mat[[locus]] <- ifelse(mother_haps$C[[locus]] %in% c_alleles,
+                     mother_haps$C[[locus]],
+                     mother_haps$D[[locus]]
+                  )
+               }
             }
-
-            if (verbose) message("\tFinished processing: ", fam, "\n")
-         },
-         error = function(e) {
-            message("\t!ERROR in family ", fam, ": ", conditionMessage(e))
          }
-      )
+
+         # Store canonical AC haplotypes from Child 1
+         if (i == 1) {
+            child1_pat <- pat
+            child1_mat <- mat
+         }
+
+         # AC anchoring
+         if (i == 1) {
+            pat_label <- "A"
+            mat_label <- "C"
+         } else {
+            pat_label <- if (identical(pat, child1_pat)) "A" else "B"
+            mat_label <- if (identical(mat, child1_mat)) "C" else "D"
+         }
+
+         results[[paste(fam, child_ID, sep = "__")]] <- tibble::tibble(
+            FAMILY_ID = fam,
+            Child_ID = child_ID,
+            Haplotype = c(pat_label, mat_label),
+            Allele_string = c(make_string(pat), make_string(mat))
+         )
+      }
    }
 
-   final <- dplyr::bind_rows(results)
-
-   if (nrow(final) == 0) {
-      warning("No haplotypes produced")
-      return(NULL)
-   }
-
-   return(final)
+   dplyr::bind_rows(results)
 }

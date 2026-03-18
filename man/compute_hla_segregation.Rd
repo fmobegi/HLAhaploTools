@@ -8,56 +8,44 @@ compute_hla_segregation(hped, collapse = "~", verbose = TRUE)
 }
 \arguments{
 \item{hped}{A data frame containing pedigree and HLA allele columns. Must
-include \code{FAMILY_ID} and \code{Family_Member}. Allele columns should follow the
+include \code{FAMILY_ID} and \code{Family_Member}. Allele columns must follow the
 pattern \verb{<Locus>_1} and \verb{<Locus>_2}.}
 
 \item{collapse}{Character scalar used to join alleles into a haplotype
-string (default: \code{"~"}).}
+string. Default is \code{"~"}.}
 
-\item{verbose}{Logical; if \code{TRUE} prints progress messages (default: \code{TRUE}).}
+\item{verbose}{Logical; if \code{TRUE}, prints progress messages.}
 }
 \value{
-A tibble with columns:
-\itemize{
-\item \code{FAMILY_ID}
-\item \code{Child_ID}
-\item \code{Haplotype} (one of \code{A}, \code{B}, \code{C}, \code{D})
-\item \code{Allele_string} (collapsed haplotype string or \code{NA} if no alleles)
-}
+A tibble with one paternal and one maternal haplotype per child.
 }
 \description{
-Phase HLA alleles into transmitted and non-transmitted haplotypes for each
-child in a pedigree. The function supports:
-\itemize{
-\item complete trios (father, mother, children),
-\item single-parent families with three or more children (inference mode),
-\item multi-locus HLA data where each locus is represented by two allele columns
-(e.g., A_1, A_2).
-}
+This function phases multi‑locus HLA alleles into transmitted paternal and
+maternal haplotypes for each child in a pedigree. It supports:
 }
 \details{
-Haplotype labels:
-\itemize{
-\item \strong{A}: paternal transmitted
-\item \strong{B}: paternal non-transmitted
-\item \strong{C}: maternal transmitted
-\item \strong{D}: maternal non-transmitted
+• Complete trios (father, mother, ≥1 child)
+• Single‑parent families with ≥3 children (inference mode)
+• Multi‑locus HLA data where each locus has two allele columns
+(e.g., \code{A_1}, \code{A_2}, \code{B_1}, \code{B_2}, etc.)
+\subsection{Haplotype labelling (AC anchoring)}{
+
+• \strong{Child 1} defines the canonical haplotypes:
+– Paternal haplotype → \strong{A}
+– Maternal haplotype → \strong{C}
+
+• For all subsequent children:
+– If their paternal haplotype matches Child 1 → \strong{A}, else \strong{B}
+– If their maternal haplotype matches Child 1 → \strong{C}, else \strong{D}
+
+This yields the four possible transmitted haplotype combinations:
+\strong{AC}, \strong{AD}, \strong{BC}, \strong{BD}.
 }
 
-When one parent is missing and there are at least three children, the missing
-parent's alleles are inferred by subtracting the known parent's alleles from
-the union of child alleles at each locus.
+\subsection{Missing‑parent inference}{
 
-The function attempts deterministic phasing where possible. For ambiguous
-loci (both parents share an allele present in the child), a simple tie-break
-heuristic is used to assign transmitted alleles. Non-transmitted alleles are
-taken from the parent's remaining allele; in homozygous cases the same allele
-may be used for both transmitted and non-transmitted haplotypes.
+When one parent is missing and ≥3 children are present, the missing parent's
+alleles are inferred locus‑by‑locus by subtracting the known parent's alleles
+from the union of child alleles.
 }
-\examples{
-\dontrun{
-# hped must contain FAMILY_ID, Family_Member and locus_1 / locus_2 columns
-res <- compute_hla_segregation(hped, collapse = "-", verbose = TRUE)
-}
-
 }

@@ -2,6 +2,7 @@
 *.Rproj
 *.Rprofile
 *.Renviron
+*.bk
 *.txt
 *.tsv
 *.xlsx
