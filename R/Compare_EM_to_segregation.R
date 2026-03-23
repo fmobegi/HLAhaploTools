@@ -10,7 +10,8 @@
 #'
 #' @param hap_df A data frame or tibble containing EM-estimated haplotypes. .
 #' @param hap_results A data frame or tibble containing segregation analysis
-#'   results.
+#'   results. tibble 2 contains all 4 haplotype strings regardless inherited
+#'   or not.
 #' @param collapse Character string used to separate each alleles.
 #'
 #' @return A data frame summarising the best segregation match for each EM
@@ -64,8 +65,8 @@ compare_EM_to_segregation <- function(hap_df, collapse = ", ") {
          segregation_haplotype = NA
       )
 
-      for (j in seq_len(nrow(hap_results))) {
-         sa_haplotype_string <- as.character(hap_results$Allele_string[j])
+      for (j in seq_len(nrow(hap_results[[2]]))) {
+         sa_haplotype_string <- as.character(hap_results[[2]]$Allele_Strings[j])
          sa_map <- parse_haplotype(sa_haplotype_string)
 
          common_loci <- intersect(names(em_map), names(sa_map))
