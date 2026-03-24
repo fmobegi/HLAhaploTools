@@ -58,7 +58,7 @@ em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE) {
    df <- df_decoded_mac %>%
       dplyr::select(dplyr::all_of(cols)) %>%
       tibble::as_tibble() %>%
-      dplyr::mutate(across(everything(), ~ na_if(.x, ""))) %>%
+      dplyr::mutate(dplyr::across(dplyr::everything(), ~ dplyr::na_if(.x, ""))) %>%
       as.matrix()
 
    # Run EM algorithm
