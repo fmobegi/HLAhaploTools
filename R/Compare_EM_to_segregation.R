@@ -36,7 +36,7 @@
 #' @importFrom utils View
 #'
 #' @export
-compare_EM_to_segregation <- function(hap_df, collapse = ", ") {
+compare_EM_to_segregation <- function(hap_df, hap_results, collapse = ", ") {
    parse_haplotype <- function(hap_string) {
       alleles <- stringr::str_split(hap_string, "~")[[1]]
       alleles_2field <- stringr::str_extract(alleles, "^[A-Z0-9]+\\*\\d+:\\d+")
