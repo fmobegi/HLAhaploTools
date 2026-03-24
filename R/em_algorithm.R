@@ -31,7 +31,7 @@
 #' @importFrom haplo.stats haplo.em
 #'
 #' @export
-em_algorithm <- function(df_raw, collapse = ", ", quiet = quiet) {
+em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE) {
    set.seed(2026)
 
    # Trim MAC-decoded alleles: keep only the first allele before "/"
@@ -90,5 +90,5 @@ em_algorithm <- function(df_raw, collapse = ", ", quiet = quiet) {
       dplyr::arrange(Haplotype, dplyr::desc(EM_Probability)) %>%
       dplyr::distinct()
 
-   hap_df
+   return(hap_df)
 }

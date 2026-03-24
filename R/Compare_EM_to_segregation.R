@@ -118,5 +118,5 @@ compare_EM_to_segregation <- function(hap_df, collapse = ", ") {
          )
       )
 
-   View(comparison_df)
+   print(comparison_df)
 }
