@@ -90,5 +90,8 @@ em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE) {
       dplyr::arrange(Haplotype, dplyr::desc(EM_Probability)) %>%
       dplyr::distinct()
 
+   hap_df <- hap_df %>%
+      dplyr::select(EM_Probability, Frequency, Haplotype)
+
    return(hap_df)
 }
