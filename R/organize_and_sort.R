@@ -151,6 +151,7 @@ organize_and_sort <- function(df,
       df$Family_Member <- sub("^[mM]$|^[mM]other$|^[mM]om$", "M", df$Family_Member)
       df$Family_Member <- sub("^[cC]hild[ -]?([0-9]+)$", "C\\1", df$Family_Member)
       df$Family_Member <- sub("^[cC]hild$", "C1", df$Family_Member)
+      df$Family_Member <- sub("^C$", "C0", df$Family_Member)
 
       # Standard ordering: Father, Mother, Child1, Child2, ...
       child_codes <- grep("^C[0-9]+$", unique(df$Family_Member), value = TRUE)
