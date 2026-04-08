@@ -4,15 +4,16 @@
 \alias{compare_EM_to_segregation}
 \title{Compare EM Algorithm Haplotypes with Segregation Analysis}
 \usage{
-compare_EM_to_segregation(hap_df, collapse = ", ")
+compare_EM_to_segregation(hap_df, hap_results, collapse = ", ")
 }
 \arguments{
 \item{hap_df}{A data frame or tibble containing EM-estimated haplotypes. .}
 
-\item{collapse}{Character string used to separate each alleles.}
-
 \item{hap_results}{A data frame or tibble containing segregation analysis
-results.}
+results. tibble 2 contains all 4 haplotype strings regardless inherited
+or not.}
+
+\item{collapse}{Character string used to separate each alleles.}
 }
 \value{
 A data frame summarising the best segregation match for each EM
