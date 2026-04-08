@@ -121,7 +121,7 @@ compute_hla_segregation <- function(hped, collapse = "~", verbose = TRUE) {
             children_row <- fam_rows %>%
                dplyr::filter(tolower(Family_Member) %in%
                   c(
-                     "child", "child1", "child2", "child3", "c", "c1", "c2", "c3",
+                     "child", "child1", "child2", "child3", "c", "c0", "c1", "c2", "c3",
                      "children", "children1", "children2", "children3"
                   ))
 
