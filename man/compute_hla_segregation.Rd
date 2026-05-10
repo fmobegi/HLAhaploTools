@@ -7,67 +7,68 @@
 compute_hla_segregation(hped, collapse = "~", verbose = TRUE)
 }
 \arguments{
-\item{hped}{A data frame containing pedigree and HLA allele columns. Must
-include \code{FAMILY_ID} and \code{Family_Member}. Allele columns should follow the
-pattern \verb{<Locus>_1} and \verb{<Locus>_2}.}
+\item{hped}{A data frame containing pedigree information and HLA alleles.
+Must include \code{FAMILY_ID} and \code{Family_Member}. Allele columns
+must follow the pattern \code{<Locus>_1} and \code{<Locus>_2}.}
 
 \item{collapse}{Character scalar used to join alleles into a haplotype
 string (default: \code{"~"}).}
 
-\item{verbose}{Logical; if \code{TRUE} prints progress messages (default: \code{TRUE}).}
+\item{verbose}{Logical; if \code{TRUE}, prints progress messages to the
+console (default: \code{TRUE}).}
 }
 \value{
 A named list containing two tibbles:
 \describe{
-\item{segregation}{A tibble showing the inherited haplotypes for every child:
+\item{segregation}{A tibble with phased results for every child:
 \itemize{
 \item \code{FAMILY_ID}: The unique family identifier.
-\item \code{Child_ID}: The name/ID of the child.
-\item \code{Haplotype}: Label of the inherited haplotype (A, B, C, or D).
-\item \code{Allele_string}: The specific sequence of inherited alleles.
+\item \code{Child_ID}: The ID/Member name of the child.
+\item \code{Haplotype}: The assigned haplotype label (A, B, C, or D).
+\item \code{Allele_strings}: The collapsed sequence of alleles for that haplotype.
 }
 }
-\item{allele_string}{A summary tibble showing the four master reference
-haplotypes established for each family (A, B, C, and D).}
+\item{allele_string}{A dictionary tibble showing the master reference
+haplotypes (A, B, C, D) established for each family.}
 }
 }
 \description{
-This function performs two tasks: it establishes reference haplotypes (A, B, C, D)
-based on the first child in a family, and then uses those references to phase
-the inherited alleles for all children in the pedigree.
-}
-\details{
 The function supports:
 \itemize{
-\item complete trios (father, mother, children),
-\item single-parent families with three or more children (inference mode),
-\item multi-locus HLA data where each locus is represented by two allele columns
-(e.g., A_1, A_2).
+\item Complete trios (Father, Mother, Children).
+\item Single-parent families with three or more children (Inference Mode).
+\item Multi-locus data where each locus has two allele columns (e.g., A_1, A_2).
 }
 
-Haplotype labels:
+Haplotype definitions:
 \itemize{
-\item \strong{A}: paternal transmitted
-\item \strong{B}: paternal non-transmitted
-\item \strong{C}: maternal transmitted
-\item \strong{D}: maternal non-transmitted
+\item \strong{A}: Paternal haplotype transmitted to Child 1.
+\item \strong{B}: Paternal haplotype NOT transmitted to Child 1.
+\item \strong{C}: Maternal haplotype transmitted to Child 1.
+\item \strong{D}: Maternal haplotype NOT transmitted to Child 1.
 }
+}
+\details{
+This function performs multi-locus HLA phasing within pedigrees. It establishes
+master reference haplotypes (A, B, C, D) based on the first child in each
+family and then uses a linkage-aware scoring system to phase inherited
+alleles for all siblings.
 
-When one parent is missing and there are at least three children, the missing
-parent's alleles are inferred by subtracting the known parent's alleles from
-the union of child alleles at each locus.
-
-The function follows a "Child 1 Reference" logic and attempts deterministic
-phasing where possible. For ambiguous loci
-(both parents share an allele present in the child), a simple tie-break
-heuristic is used to assign transmitted alleles. Non-transmitted alleles are
-taken from the parent's remaining allele; in homozygous cases the same allele
-may be used for both transmitted and non-transmitted haplotypes.
+The function utilizes a "Child 1 Reference" logic. For families missing a
+parent, the missing alleles are inferred by subtracting the known parent's
+alleles from the collective pool of all children's alleles. Phasing for
+siblings is determined by calculating the best-fit match score across all
+four possible Mendelian combinations (AC, AD, BC, BD), which provides
+robustness against missing data or homozygous loci.
 }
 \examples{
 \dontrun{
-# hped must contain FAMILY_ID, Family_Member and locus_1 / locus_2 columns
-res <- compute_hla_segregation(hped, collapse = "-", verbose = TRUE)
+# hped must contain FAMILY_ID, Family_Member, and locus_1/locus_2 columns
+res <- compute_hla_segregation(hped, collapse = "~", verbose = TRUE)
+
+# Access results
+phased_children <- res$segregation
+family_haplotypes <- res$allele_string
 }
 
 }

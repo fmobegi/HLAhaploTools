@@ -9,8 +9,8 @@
 \usage{
 HLAhaploTools(
   filepath,
-  trim = FALSE,
-  resolution = 3,
+  trim = TRUE,
+  resolution = 2,
   isfamily = NULL,
   mac = TRUE,
   plot_freq = FALSE,

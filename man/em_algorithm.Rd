@@ -4,7 +4,7 @@
 \alias{em_algorithm}
 \title{EM Algorithm for Haplotype Reconstruction}
 \usage{
-em_algorithm(df_raw, collapse = "~", quiet = FALSE)
+em_algorithm(df_raw, collapse = "~", quiet = FALSE, res_fields = 2)
 }
 \arguments{
 \item{df_raw}{A tibble containing family HLA typing data. Expected to
