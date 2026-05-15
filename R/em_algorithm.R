@@ -31,64 +31,97 @@
 #' @importFrom haplo.stats haplo.em
 #'
 #' @export
-em_algorithm <- function(df_raw, collapse = ", ", quiet = quiet) {
+em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE, res_fields = 2) {
    set.seed(2026)
 
-   # Trim MAC-decoded alleles: keep only the first allele before "/"
-   df_decoded_mac <- df_raw %>%
-      dplyr::mutate(across(everything(), ~ sub("/.*", "", .x)))
+   inner_reduce_res <- function(x, fields = 2) {
+      pattern <- paste0("^([^:]+(?::[^:]+){0,", fields - 1, "}).*")
+      sub(pattern, "\\1", x)
+   }
 
    loci <- c(
-      "F", "G", "H", "A", "J", "C", "B", "E", "MICA", "MICB", "DRB1",
-      "DRB4", "DQA1", "DQB1", "DPA1", "DPB1"
+      "F", "G", "H", "A", "J", "C", "B", "E",
+      "MICA", "MICB", "DRB1", "DRB3", "DRB4",
+      "DRB5", "DQA1", "DQB1", "DMB", "DMA", "DOA", "DPA1", "DPB1"
    )
 
-   # Keep only loci that exist in df_raw
    loci_check <- loci[sapply(loci, function(loc) {
       paste0(loc, "_1") %in% names(df_raw)
    })]
 
-   # Build column list LOCUS_1, LOCUS_2
-   cols <- as.vector(rbind(
-      paste0(loci_check, "_1"),
-      paste0(loci_check, "_2")
-   ))
+   cols <- unlist(lapply(loci_check, function(x) {
+      c(paste0(x, "_1"), paste0(x, "_2"))
+   }))
 
-   # Prepare matrix for haplo.em()
-   df <- df_decoded_mac %>%
+   df_processed <- df_raw %>%
+      dplyr::mutate(dplyr::across(dplyr::all_of(cols), ~ {
+         val <- as.character(.x)
+         val <- sub("/.*", "", val)
+         val <- inner_reduce_res(val, fields = res_fields)
+         dplyr::na_if(val, "")
+      }))
+
+   df_matrix <- df_processed %>%
       dplyr::select(dplyr::all_of(cols)) %>%
-      tibble::as_tibble() %>%
-      dplyr::mutate(across(everything(), ~ na_if(.x, ""))) %>%
       as.matrix()
 
-   # Run EM algorithm
-   em <- haplo.stats::haplo.em(
-      df,
-      locus.label = loci_check,
-      miss.val = NA
+   missing_pct <- sum(is.na(df_matrix)) / length(df_matrix) * 100
+   if (!quiet) cli::cli_alert_info("Missing data: {round(missing_pct, 2)}%")
+
+   em <- tryCatch(
+      {
+         haplo.stats::haplo.em(
+            df_matrix,
+            locus.label = loci_check,
+            miss.val = NA,
+            control = haplo.stats::haplo.em.control(
+               n.try = 1,
+               insert.batch.size = 2,
+               min.posterior = 0.005,
+               tol = 1e-4
+            )
+         )
+      },
+      error = function(e) {
+         cli::cli_alert_danger("EM failed: {e$message}")
+         return(NULL)
+      }
    )
 
-   hap_df <- tibble::tibble(
-      haplotypes = em$haplotype,
-      hap_probs  = em$hap.prob
-   ) %>%
-      dplyr::rowwise() %>%
-      dplyr::mutate(
-         Haplotype = paste(
-            stats::na.omit(dplyr::c_across(1:(ncol(.) - 1))),
-            collapse = "~"
-         )
-      ) %>%
-      dplyr::ungroup() %>%
-      dplyr::select(Haplotype, EM_Probability = hap_probs) %>%
+   if (is.null(em) || is.null(em$haplotype)) {
+      return(tibble::tibble(EM_Probability = numeric(), Frequency = integer(), Haplotype = character()))
+   }
+
+   hap_df <- tibble::as_tibble(em$haplotype)
+
+   locus_names <- names(hap_df)
+
+   hap_df <- hap_df %>%
+      dplyr::mutate(Haplotype = apply(., 1, function(row_vals) {
+         prefixed_vals <- purrr::map2_chr(locus_names, row_vals, function(l, v) {
+            if (is.na(v) || v == "") {
+               return(NA_character_)
+            }
+            paste0(l, "*", v)
+         })
+
+         vals <- stats::na.omit(prefixed_vals)
+
+         if (length(vals) == 0) {
+            return(NA_character_)
+         }
+         paste(vals, collapse = collapse)
+      })) %>%
+      dplyr::mutate(EM_Probability = em$hap.prob) %>%
+      dplyr::filter(!is.na(Haplotype), Haplotype != "") %>%
       dplyr::group_by(Haplotype) %>%
       dplyr::summarise(
          EM_Probability = sum(EM_Probability),
          Frequency = dplyr::n(),
          .groups = "drop"
       ) %>%
-      dplyr::arrange(Haplotype, dplyr::desc(EM_Probability)) %>%
-      dplyr::distinct()
+      dplyr::arrange(dplyr::desc(EM_Probability)) %>%
+      dplyr::select(EM_Probability, Frequency, Haplotype)
 
-   hap_df
+   return(hap_df)
 }

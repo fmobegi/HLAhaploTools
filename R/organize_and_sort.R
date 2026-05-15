@@ -153,7 +153,7 @@ organize_and_sort <- function(df,
       df$Family_Member <- sub("^[cC]hild$", "C1", df$Family_Member)
 
       # Standard ordering: Father, Mother, Child1, Child2, ...
-      child_codes <- grep("^C[0-9]+$", unique(df$Family_Member), value = TRUE)
+      child_codes <- grep("C", unique(df$Family_Member), value = TRUE, ignore.case = TRUE)
       order_levels <- c("F", "M", sort(child_codes))
 
       df$Family_Member <- factor(df$Family_Member, levels = order_levels)
