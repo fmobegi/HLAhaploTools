@@ -68,9 +68,9 @@ A named list with the following components:
 }
 }
 \description{
-Provides tools for working with extended human leukocyte antigen (HLA)
-haplotypes, including functions for haplotype construction, visualization,
-family-based inference, and population-level summaries.
+Provides tools for constructing, analysing, and visualising extended
+human leukocyte antigen (HLA) haplotypes, including family‑based
+segregation analysis, EM‑based inference, and population‑level summaries.
 
 A master wrapper that loads HLA typing data from file, detects data format,
 applies optional formatting and trimming, decodes multi-allele strings (MAC),
@@ -137,11 +137,12 @@ Useful links:
 \code{\link{decode_classical_mac}}, \code{\link{infer_haplotypes}}
 }
 \author{
-\strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au} (fmobegi)
+\strong{Maintainer}: Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au} (GitHub: fmobegi)
 
 Authors:
 \itemize{
-  \item Hoiley Sham \email{24409393@student.uwa.edu.au} (h-sham)
+  \item Fredrick Mobegi \email{fredrick.mobegi@health.wa.gov.au} (GitHub: fmobegi)
+  \item Hoiley Sham \email{24409393@student.uwa.edu.au} (GitHub: h-sham)
 }
 
 }
