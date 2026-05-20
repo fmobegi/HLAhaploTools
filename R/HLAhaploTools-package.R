@@ -12,12 +12,9 @@
 #' @importFrom stats reorder frequency na.omit
 #' @importFrom magrittr %>%
 #' @importFrom dplyr mutate distinct slice_max relocate select filter
-#'     group_by summarise arrange across na_if
 #' @importFrom tibble tibble as_tibble
 #' @importFrom ggplot2 ggplot aes geom_bar geom_text scale_y_continuous
-#'     labs theme_minimal coord_flip element_text theme theme_void ggtitle
 #' @importFrom haplo.stats haplo.em
-#'
 #' @import dplyr
 #' @import forcats
 #' @import furrr
