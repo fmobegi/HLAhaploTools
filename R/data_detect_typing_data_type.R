@@ -1,192 +1,86 @@
-# ~~~~~~~~~~~~~~~~~~
-# clean_column_names
-# ~~~~~~~~~~~~~~~~~~
-#' Clean HLA Data Column Names
+# ~~~~~~~~~~~~~~~~
+# detect_data_type
+# ~~~~~~~~~~~~~~~~
+#' Detect HLA Data Type
 #'
-#' Internal helper function to standardize column names.
+#' Determines whether data appears to be from a family study or regular typing.
 #'
-#' @param df A data frame or tibble
+#' @param df A data frame with HLA typing data
 #' @param quiet Logical. If TRUE, suppresses status messages.
 #'
-#' @return A tibble with cleaned column names
+#' @return Logical TRUE if data appears to be family data, FALSE otherwise
 #' @keywords internal
-#'
-#' @importFrom janitor clean_names
-#' @importFrom dplyr mutate across
-clean_column_names <- function(df, quiet = FALSE) {
+detect_data_type <- function(df, quiet = FALSE) {
+   col_names <- colnames(df)
+   col_names_lower <- tolower(col_names)
+
+   # Define column name patterns (lowercase only for matching)
+   family_id_keys <- c("family_id", "familyid", "family")
+   member_keys <- c("family_member", "member", "relationship")
+   sample_id_keys <- c("sampleid", "sample_id", "id", "patient_id", "subject_id", "donor_id", "recipientid")
+
+   # Identify matching columns
+   family_matches <- which(col_names_lower %in% family_id_keys)
+   member_matches <- which(col_names_lower %in% member_keys)
+   sample_id_matches <- which(col_names_lower %in% sample_id_keys)
+
+   family_col <- if (length(family_matches) > 0) col_names[family_matches[1]] else NULL
+   member_col <- if (length(member_matches) > 0) col_names[member_matches[1]] else NULL
+   sample_id_cols <- if (length(sample_id_matches) > 0) col_names[sample_id_matches] else character(0)
+
+   # Strictly check if data qualifies as family format
+   is_family <- FALSE
+   if (!is.null(family_col) && !is.null(member_col) &&
+      family_col %in% colnames(df) && member_col %in% colnames(df)) {
+      fam_values <- df[[family_col]]
+      member_vals <- unique(na.omit(as.character(df[[member_col]])))
+      fam_repeats <- any(table(fam_values) > 1)
+
+      valid_member_labels <- sum(member_vals %in% c("F", "M", "Father", "Mother", "Child")) +
+         sum(grepl("^C\\d+$", member_vals))
+
+      is_family <- fam_repeats && valid_member_labels >= 2
+   }
+
+   # Fallback logic for non-family format
+   id_cols <- if (is_family) {
+      na.omit(c(family_col, member_col))
+   } else if (length(sample_id_cols) > 0) {
+      sample_id_cols
+   } else if (!is.null(family_col) && family_col %in% colnames(df)) {
+      family_col
+   } else {
+      fallback_col <- "Sample_ID"
+      if (!(fallback_col %in% colnames(df))) {
+         df[[fallback_col]] <- seq_len(nrow(df)) # inject row-based IDs
+         if (!quiet) message(sprintf("\t⚠️ No ID columns found; added fallback ID column '%s'", fallback_col))
+      }
+      fallback_col
+   }
+
+   # Messages
    if (!quiet) {
-      message("\t🧹 Cleaning column names...")
-   }
-
-   # Make backup of original column names for reporting
-   orig_names <- colnames(df)
-
-   # Trim whitespace from character columns
-   df <- dplyr::mutate(df, dplyr::across(where(is.character), trimws))
-
-   # Define known HLA gene patterns
-   hla_gene_patterns <- c(
-      # Class I
-      "^[A-C]$",
-      "^[A-C][_.-]?\\d$",
-      "^[A-C][_.-]?ALLELE[_.-]?\\d$",
-      # Class II
-      "^DR[A-Z]?\\d*$",
-      "^DR[A-Z]?\\d*[_.-]?\\d$",
-      "^DR[A-Z]?\\d*[_.-]?ALLELE[_.-]?\\d$",
-      "^D[QP][A-Z]\\d*$",
-      "^D[QP][A-Z]\\d*[_.-]?\\d$",
-      "^D[QP][A-Z]\\d*[_.-]?ALLELE[_.-]?\\d$",
-      # Non-classical
-      "^[E-L]$",
-      "^[E-L][_.-]?\\d$",
-      "^[E-L][_.-]?ALLELE[_.-]?\\d$",
-      "^HFE$",
-      "^HFE[_.-]?\\d$",
-      "^HFE[_.-]?ALLELE[_.-]?\\d$",
-      # MIC
-      "^MIC[AB]$",
-      "^MIC[AB][_.-]?\\d$",
-      "^MIC[AB][_.-]?ALLELE[_.-]?\\d$"
-   )
-
-   # First pass with janitor but preserving case
-   df <- janitor::clean_names(df, case = "none")
-
-   # Track changes
-   changes <- vector("character", 0)
-
-   # For each column, check if it matches an HLA gene pattern
-   for (i in seq_along(colnames(df))) {
-      col_name <- colnames(df)[i]
-
-      # Skip columns already in proper format (with _1 or _2 suffix)
-      if (grepl("^\\w+_[12]$", col_name)) {
-         next
-      }
-
-      # Check if column matches HLA gene pattern
-      is_hla_gene <- any(sapply(hla_gene_patterns, function(pattern) {
-         grepl(pattern, col_name, ignore.case = TRUE)
-      }))
-
-      if (is_hla_gene) {
-         # Extract base gene name and allele number
-         if (grepl("ALLELE[_.-]?(\\d)$", col_name, ignore.case = TRUE)) {
-            # Format: GENE_ALLELE_1 or GENE.ALLELE.1
-            new_name <- sub("(\\w+)[_.-]?ALLELE[_.-]?(\\d)$",
-               "\\1_\\2",
-               col_name,
-               ignore.case = TRUE
-            )
-         } else if (grepl("(\\w+)[_.-]?(\\d)$", col_name)) {
-            # Format: GENE_1 or GENE.1 or GENE1
-            new_name <- sub("(\\w+)[_.-]?(\\d)$", "\\1_\\2", col_name)
-         } else if (grepl("^([A-Z]+\\d*)$", col_name, ignore.case = TRUE)) {
-            # Format: GENE with no number
-            # In this case, we're not sure if this is a gene or not
-            # Don't change it
-            next
-         } else {
-            # Can't determine format
-            next
-         }
-
-         # Record change if any
-         if (new_name != col_name) {
-            changes <- c(changes, sprintf("'%s' → '%s'", col_name, new_name))
-            colnames(df)[i] <- new_name
-         }
-      }
-   }
-
-   # Standardize ID columns
-
-   # (Family ID)
-   family_id_variants <- c(
-      "FAMILY_ID",
-      "Family_ID",
-      "family_id",
-      "FamilyID",
-      "familyid",
-      "Family",
-      "family"
-   )
-   for (variant in family_id_variants) {
-      idx <- which(tolower(colnames(df)) == tolower(variant))
-      if (length(idx) > 0) {
-         old_name <- colnames(df)[idx[1]]
-         colnames(df)[idx[1]] <- "FAMILY_ID"
-         if (old_name != "FAMILY_ID") {
-            changes <- c(changes, sprintf("'%s' → 'FAMILY_ID'", old_name))
-         }
-         break
-      }
-   }
-
-   # (Family Member)
-   member_variants <- c(
-      "Family_Member",
-      "FamilyMember",
-      "Member",
-      "MEMBER",
-      "Relationship",
-      "RELATIONSHIP"
-   )
-   for (variant in member_variants) {
-      idx <- which(tolower(colnames(df)) == tolower(variant))
-      if (length(idx) > 0) {
-         old_name <- colnames(df)[idx[1]]
-         colnames(df)[idx[1]] <- "Family_Member"
-         if (old_name != "Family_Member") {
-            changes <- c(changes, sprintf("'%s' → 'Family_Member'", old_name))
-         }
-         break
-      }
-   }
-
-   # (Sample ID - for non-family data)
-   sample_id_variants <- c(
-      "SampleID",
-      "Sample_ID",
-      "ID",
-      "Id",
-      "id",
-      "PATIENT_ID",
-      "Patient_ID",
-      "Subject_ID",
-      "Donor_ID",
-      "donor_id",
-      "RecipientID",
-      "recipient_id"
-   )
-
-   for (variant in sample_id_variants) {
-      idx <- which(tolower(colnames(df)) == tolower(variant))
-      if (length(idx) > 0) {
-         old_name <- colnames(df)[idx[1]]
-         colnames(df)[idx[1]] <- "Sample_ID"
-         if (old_name != "Sample_ID") {
-            changes <- c(changes, sprintf("'%s' → 'Sample_ID'", old_name))
-         }
-         break
-      }
-   }
-
-   # Report changes
-   if (!quiet && length(changes) > 0) {
-      message(sprintf("\t   Standardized %d column names", length(changes)))
-      if (length(changes) <= 5) {
-         for (change in changes) {
-            message(sprintf("\t   %s", change))
-         }
+      if (is_family) {
+         message("\t👪 Data appears to be FAMILY STUDY format")
+         message(sprintf("\t   Found family ID column: %s", family_col))
+         message(sprintf("\t   Found family member column: %s", member_col))
       } else {
-         message(sprintf("\t   (First 5 changes shown of %d total)", length(changes)))
-         for (change in changes[1:5]) {
-            message(sprintf("\t   %s", change))
+         message("\t👤 Data appears to be REGULAR TYPING format (e.g., registry or population data)")
+         if (length(sample_id_cols) > 0) {
+            message(sprintf("\t   Found sample ID columns: %s", paste(sample_id_cols, collapse = ", ")))
+         } else if (!is.null(family_col)) {
+            message(sprintf("\t   Using %s as sample identifier", family_col))
+         } else {
+            message("\t   No standard identifier column found - will use row numbers")
          }
       }
    }
 
-   df
+   # Return metadata list
+   list(
+      is_family = is_family,
+      family_col = if (is_family) family_col else NULL,
+      member_col = if (is_family) member_col else NULL,
+      id_cols = id_cols
+   )
 }
