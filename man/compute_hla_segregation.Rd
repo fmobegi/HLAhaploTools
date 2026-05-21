@@ -7,68 +7,83 @@
 compute_hla_segregation(hped, collapse = "~", verbose = TRUE)
 }
 \arguments{
-\item{hped}{A data frame containing pedigree information and HLA alleles.
-Must include \code{FAMILY_ID} and \code{Family_Member}. Allele columns
-must follow the pattern \code{<Locus>_1} and \code{<Locus>_2}.}
+\item{hped}{A data frame containing family structure and HLA allele calls.
+Must contain at minimum \code{FAMILY_ID} and \code{Family_Member} columns.}
 
-\item{collapse}{Character scalar used to join alleles into a haplotype
-string (default: \code{"~"}).}
+\item{collapse}{Character separator used when concatenating alleles into
+haplotype strings. Default is \code{"~"}.}
 
-\item{verbose}{Logical; if \code{TRUE}, prints progress messages to the
-console (default: \code{TRUE}).}
+\item{verbose}{Logical; if \code{TRUE}, progress messages are printed during
+processing. Default is \code{TRUE}.}
 }
 \value{
-A named list containing two tibbles:
+A list containing two tibbles:
 \describe{
-\item{segregation}{A tibble with phased results for every child:
+\item{segregation}{
+Child-level haplotype inheritance assignments with columns:
 \itemize{
-\item \code{FAMILY_ID}: The unique family identifier.
-\item \code{Child_ID}: The ID/Member name of the child.
-\item \code{Haplotype}: The assigned haplotype label (A, B, C, or D).
-\item \code{Allele_strings}: The collapsed sequence of alleles for that haplotype.
+\item \code{FAMILY_ID}
+\item \code{Child_ID}
+\item \code{Haplotype}
+\item \code{Allele_string}
 }
 }
-\item{allele_string}{A dictionary tibble showing the master reference
-haplotypes (A, B, C, D) established for each family.}
+\item{Allele_Strings}{
+Family-level phased haplotype strings for inferred paternal and maternal
+haplotypes.
+}
 }
 }
 \description{
-The function supports:
-\itemize{
-\item Complete trios (Father, Mother, Children).
-\item Single-parent families with three or more children (Inference Mode).
-\item Multi-locus data where each locus has two allele columns (e.g., A_1, A_2).
-}
-
-Haplotype definitions:
-\itemize{
-\item \strong{A}: Paternal haplotype transmitted to Child 1.
-\item \strong{B}: Paternal haplotype NOT transmitted to Child 1.
-\item \strong{C}: Maternal haplotype transmitted to Child 1.
-\item \strong{D}: Maternal haplotype NOT transmitted to Child 1.
-}
+Performs simple rule-based HLA haplotype phasing and segregation analysis
+across nuclear families using HPED-style genotype data. The function attempts
+to infer parental haplotypes (A/B for father and C/D for mother) based on
+shared alleles observed in children, then assigns the most likely haplotype
+combination inherited by each child.
 }
 \details{
-This function performs multi-locus HLA phasing within pedigrees. It establishes
-master reference haplotypes (A, B, C, D) based on the first child in each
-family and then uses a linkage-aware scoring system to phase inherited
-alleles for all siblings.
+The function supports:
+\itemize{
+\item Complete trios (mother, father, children)
+\item Families with one missing parent (if at least 3 children are available)
+\item Automatic inference of missing parental alleles from offspring
+\item Multi-locus HLA haplotype string generation
+}
 
-The function utilizes a "Child 1 Reference" logic. For families missing a
-parent, the missing alleles are inferred by subtracting the known parent's
-alleles from the collective pool of all children's alleles. Phasing for
-siblings is determined by calculating the best-fit match score across all
-four possible Mendelian combinations (AC, AD, BC, BD), which provides
-robustness against missing data or homozygous loci.
+Expected input columns include:
+\describe{
+\item{FAMILY_ID}{Unique family identifier}
+\item{Family_Member}{Relationship label (e.g. Mother, Father, Child1)}
+\item{\if{html}{\out{<GENE>}}_1, \if{html}{\out{<GENE>}}_2}{Diploid allele columns for each HLA locus}
+}
+
+Supported loci include:
+F, G, H, A, J, C, B, E, MICA, MICB, DRB1, DRB3, DRB4,
+DRB5, DQA1, DQB1, DMB, DMA, DOA, DPA1, and DPB1.
+
+Haplotypes are assigned using the first child in the family to initialize
+parental haplotype structure. Subsequent children are matched against the
+four possible parental haplotype combinations:
+
+\itemize{
+\item AC
+\item AD
+\item BC
+\item BD
+}
+
+The combination with the highest number of matching loci is selected for
+each child.
+
+Families with no identified parents are skipped. Families with only one
+parent require at least three children for missing-parent inference.
 }
 \examples{
 \dontrun{
-# hped must contain FAMILY_ID, Family_Member, and locus_1/locus_2 columns
-res <- compute_hla_segregation(hped, collapse = "~", verbose = TRUE)
+result <- compute_hla_segregation(hped)
 
-# Access results
-phased_children <- res$segregation
-family_haplotypes <- res$allele_string
+result$segregation
+result$Allele_Strings
 }
 
 }

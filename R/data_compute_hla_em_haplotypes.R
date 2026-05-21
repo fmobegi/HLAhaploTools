@@ -34,7 +34,6 @@
 em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE) {
    set.seed(2026)
 
-   # Trim MAC-decoded alleles: keep only the first allele before "/"
    df_decoded_mac <- df_raw %>%
       dplyr::mutate(across(everything(), ~ sub("/.*", "", .x)))
 
@@ -43,59 +42,55 @@ em_algorithm <- function(df_raw, collapse = "~", quiet = FALSE) {
       "DRB4", "DQA1", "DQB1", "DPA1", "DPB1"
    )
 
-   # Keep only loci that exist in df_raw
    loci_check <- loci[sapply(loci, function(loc) {
       paste0(loc, "_1") %in% names(df_raw)
    })]
 
-   # Build column list LOCUS_1, LOCUS_2
    cols <- as.vector(rbind(
       paste0(loci_check, "_1"),
       paste0(loci_check, "_2")
    ))
 
-   # Prepare matrix for haplo.em()
    df <- df_decoded_mac %>%
       dplyr::select(dplyr::all_of(cols)) %>%
       tibble::as_tibble() %>%
       dplyr::mutate(dplyr::across(dplyr::everything(), ~ dplyr::na_if(.x, ""))) %>%
       as.matrix()
 
-   # Run EM algorithm
-   em <- tryCatch({
-      haplo.stats::haplo.em(
-         df,
-         locus.label = loci_check,
-         miss.val = NA,
-         control = haplo.stats::haplo.em.control(
-            n.try = 1,
-            insert.batch.size = 2,
-            min.posterior = 0.001,
-            tol = 1e-5
+   em <- tryCatch(
+      {
+         haplo.stats::haplo.em(
+            df,
+            locus.label = loci_check,
+            miss.val = NA,
+            control = haplo.stats::haplo.em.control(
+               n.try = 1,
+               insert.batch.size = 2,
+               min.posterior = 0.001,
+               tol = 1e-5
+            )
          )
-      )
-   })
+      },
+      error = function(e) {
+         stop("haplo.em failed to converge or ran into an error: ", e$message)
+      }
+   )
 
-   hap_df <- tibble::tibble(
-      haplotypes = em$haplotype,
-      hap_probs  = em$hap.prob
-   ) %>%
-      dplyr::rowwise() %>%
-      dplyr::mutate(
-         Haplotype = paste(
-            stats::na.omit(dplyr::c_across(1:(ncol(.) - 1))),
-            collapse = "~"
-         )
-      ) %>%
-      dplyr::ungroup() %>%
-      dplyr::select(Haplotype, EM_Probability = hap_probs) %>%
+   hap_matrix <- tibble::as_tibble(em$haplotype) %>%
+      dplyr::mutate(dplyr::across(dplyr::everything(), as.character))
+
+   locus_cols <- names(hap_matrix)
+
+   hap_df <- hap_matrix %>%
+      dplyr::mutate(EM_Probability = em$hap.prob) %>%
+      tidyr::unite("Haplotype", dplyr::all_of(locus_cols), sep = collapse, na.rm = TRUE) %>%
       dplyr::group_by(Haplotype) %>%
       dplyr::summarise(
          EM_Probability = sum(EM_Probability),
          Frequency = dplyr::n(),
          .groups = "drop"
       ) %>%
-      dplyr::arrange(Haplotype, dplyr::desc(EM_Probability)) %>%
+      dplyr::arrange(dplyr::desc(EM_Probability), Haplotype) %>%
       dplyr::distinct()
 
    hap_df <- hap_df %>%
