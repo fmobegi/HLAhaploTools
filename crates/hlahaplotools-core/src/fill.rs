@@ -11,7 +11,8 @@
 //!   DRB4; DR51: DRB1*15, 16 carry DRB5; DRB1*01, 08, 10 carry none). Copies
 //!   the DRB1 typing rules out become the absent-gene placeholder `DRBx*NNNN`;
 //!   expected copies are filled from the typed alleles, a single typed allele
-//!   covering two expected copies is read as homozygous, and an expected copy
+//!   covering two expected copies is read as homozygous, the same allele
+//!   written twice where one copy is expected is read as one copy, and an expected copy
 //!   with no typed allele stays unknown.
 //! * A locus with neither allele typed stays untyped: nothing can be inferred.
 //!
@@ -71,11 +72,17 @@ pub struct FillCount {
     /// DRB3/4/5 genotypes completed from DRB1 another way (one copy filled, the
     /// other absent, or an untyped expected copy left unknown).
     pub drb_completed: usize,
+    /// DRB3/4/5 written as the same allele twice where DRB1 allows one copy:
+    /// read as that allele plus an absent copy (a common way of reporting).
+    pub duplicate_read_as_one: usize,
+    /// DRB3/4/5 typings with more copies than DRB1 allows. Left as typed and
+    /// only counted: a typing error, or a rare haplotype.
+    pub drb1_conflicts: usize,
 }
 
 impl FillCount {
     pub fn total(&self) -> usize {
-        self.homozygous + self.absent_gene + self.drb_completed
+        self.homozygous + self.absent_gene + self.drb_completed + self.duplicate_read_as_one
     }
 }
 
@@ -196,6 +203,9 @@ pub fn fill_dataset(ds: &mut Dataset, opts: &FillOptions) -> Vec<FillCount> {
                 }
                 (LocusObs::OneAllele(c), 0 | 1) => {
                     counts[k].drb_completed += 1;
+                    if want == 0 && c != &vec![absent] {
+                        counts[k].drb1_conflicts += 1;
+                    }
                     LocusObs::Genotypes(vec![(c.clone(), vec![absent])])
                 }
                 (LocusObs::OneAllele(c), _) => {
@@ -207,7 +217,25 @@ pub fn fill_dataset(ds: &mut Dataset, opts: &FillOptions) -> Vec<FillCount> {
                     });
                     LocusObs::Genotypes(vec![(c.clone(), c.clone())])
                 }
-                _ => continue, // fully typed, or untyped with two copies expected
+                (LocusObs::Genotypes(list), 0 | 1) => {
+                    let present = |side: &Vec<AlleleId>| side != &vec![absent];
+                    match list.as_slice() {
+                        [(l, r)] if want == 1 && l == r && present(l) => {
+                            counts[k].duplicate_read_as_one += 1;
+                            LocusObs::Genotypes(vec![(l.clone(), vec![absent])])
+                        }
+                        _ => {
+                            let copies = |(l, r): &(Vec<AlleleId>, Vec<AlleleId>)| {
+                                usize::from(present(l)) + usize::from(present(r))
+                            };
+                            if list.iter().all(|g| copies(g) > want) {
+                                counts[k].drb1_conflicts += 1;
+                            }
+                            continue;
+                        }
+                    }
+                }
+                _ => continue, // untyped with two copies expected, or two copies typed
             };
             *obs = new;
         }
@@ -278,6 +306,27 @@ mod tests {
         assert_eq!(gl(&ds, 3, "DRB3"), "DRB3*NNNN+DRB3*NNNN");
         let drb3 = &counts[1];
         assert_eq!((drb3.homozygous, drb3.drb_completed), (1, 1));
+    }
+
+    #[test]
+    fn single_drb345_copy_written_twice_is_read_as_one() {
+        // s1: DRB1*01 + *11 -> one DRB3 copy, written twice.
+        // s2: DRB1*03 + *11 -> two DRB3 copies, a true homozygote.
+        // s3: DRB1*01 + *08 -> no DRB4 expected, but typed: a conflict, left alone.
+        // s4: DRB1*01 + *11 -> one DRB3 copy, two different alleles: a conflict.
+        let table = "id,DRB1_1,DRB1_2,DRB3_1,DRB3_2,DRB4_1,DRB4_2\n\
+            s1,01:01,11:01,02:02,02:02,,\n\
+            s2,03:01,11:01,02:02,02:02,,\n\
+            s3,01:01,08:01,,,01:01,01:01\n\
+            s4,01:01,11:01,02:02,01:01,,\n";
+        let (ds, counts) = load(table, FillOptions::default());
+        assert_eq!(gl(&ds, 0, "DRB3"), "DRB3*02:02+DRB3*NNNN");
+        assert_eq!(gl(&ds, 1, "DRB3"), "DRB3*02:02+DRB3*02:02");
+        assert_eq!(gl(&ds, 2, "DRB4"), "DRB4*01:01+DRB4*01:01");
+        assert_eq!(gl(&ds, 3, "DRB3"), "DRB3*02:02+DRB3*01:01");
+        let (drb3, drb4) = (&counts[1], &counts[2]);
+        assert_eq!((drb3.duplicate_read_as_one, drb3.drb1_conflicts), (1, 1));
+        assert_eq!((drb4.duplicate_read_as_one, drb4.drb1_conflicts), (0, 1));
     }
 
     #[test]

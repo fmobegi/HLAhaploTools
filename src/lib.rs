@@ -92,14 +92,17 @@ mod _core {
         })
     }
 
-    /// {locus: {"homozygous": n, "absent_gene": n, "drb_completed": n}}, loci with fills only.
+    /// {locus: {"homozygous", "absent_gene", "drb_completed", "duplicate_read_as_one", "drb1_conflicts"}},
+    /// loci with fills or conflicts only.
     fn fills_to_py<'py>(py: Python<'py>, fills: &[hh::FillCount]) -> PyResult<Bound<'py, PyDict>> {
         let out = PyDict::new(py);
-        for f in fills.iter().filter(|f| f.total() > 0) {
+        for f in fills.iter().filter(|f| f.total() + f.drb1_conflicts > 0) {
             let d = PyDict::new(py);
             d.set_item("homozygous", f.homozygous)?;
             d.set_item("absent_gene", f.absent_gene)?;
             d.set_item("drb_completed", f.drb_completed)?;
+            d.set_item("duplicate_read_as_one", f.duplicate_read_as_one)?;
+            d.set_item("drb1_conflicts", f.drb1_conflicts)?;
             out.set_item(&f.locus, d)?;
         }
         Ok(out)

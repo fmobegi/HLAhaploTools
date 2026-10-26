@@ -81,6 +81,10 @@ def describe_fills(fills: dict, say) -> None:
             parts.append(f"{f['absent_gene']} gene copies set absent from DRB1")
         if f["drb_completed"]:
             parts.append(f"{f['drb_completed']} genotypes completed from DRB1")
+        if f["duplicate_read_as_one"]:
+            parts.append(f"{f['duplicate_read_as_one']} repeated alleles read as one copy (DRB1 allows one)")
+        if f["drb1_conflicts"]:
+            parts.append(f"{f['drb1_conflicts']} typings with more copies than DRB1 allows (left as typed)")
         say(f"  filled at {locus}: " + "; ".join(parts))
 
 
@@ -207,6 +211,42 @@ def parse_loci(spec: str) -> list[tuple[str, str]]:
     return out
 
 
+def cmd_rename(args) -> int:
+    """Rewrite a typing file with current IMGT/HLA allele names.
+
+    Names that IMGT/HLA has deleted or renamed since the typing was reported
+    (for example C*04:09N, now C*04:09L, or B*47:01:01:01, now B*47:01:01:03)
+    are replaced with the current name given in Deleted_alleles.txt. Everything
+    else is written unchanged. The changes are listed in <output>.renames.tsv.
+    """
+    from hlahaplotools.rename import load_renames, rename_file
+
+    if args.imgt_dir:
+        imgt = Path(args.imgt_dir)
+    else:
+        folder, manifest = find_data(args.data_dir)
+        if folder is None or "imgthla" not in manifest:
+            sys.exit("error: no IMGT/HLA files found; pass --imgt-dir or run scripts/build_nomenclature.py")
+        imgt = folder / "imgthla" / manifest["imgthla"]["release"]
+    fmt = args.format
+    if fmt is None:
+        low = args.input.lower()
+        fmt = "glsc" if low.endswith((".glc", ".glsc")) else "families" if low.endswith((".csv", ".tsv")) else "mac"
+    renames = load_renames(imgt)
+    out = Path(args.output)
+    seen = rename_file(Path(args.input), out, fmt, renames)
+    table = out.with_name(out.name + ".renames.tsv")
+    with table.open("w") as f:
+        f.write("old\tnew\ttypings\n")
+        for (old, new), n in sorted(seen.items(), key=lambda x: -x[1]):
+            f.write(f"{old}\t{new}\t{n}\n")
+    print(f"IMGT/HLA {imgt.name}: {len(renames)} retired names known")
+    print(f"Wrote {out}: {sum(seen.values())} typings renamed ({len(seen)} names); changes in {table}")
+    for (old, new), n in sorted(seen.items(), key=lambda x: -x[1]):
+        print(f"  {old} -> {new}: {n}")
+    return 0
+
+
 def cmd_estimate(args) -> int:
     nom, mac, manifest = resolve_data_paths(args)
     out_dir = Path(args.output)
@@ -255,7 +295,9 @@ def cmd_haplomat(args) -> int:
             print(f"warning: {key}=true ignored; {what} is not supported", file=sys.stderr)
     nom, mac, manifest = resolve_data_paths(args)
     # Hapl-o-Mat orders loci alphabetically (it keeps them in a std::map).
-    loci_res = sorted(parse_loci(p["LOCI_AND_RESOLUTIONS"]))
+    # Older Hapl-o-Mat parameter files count digits: 2d, 4d, 6d, 8d = 1f, 2f, 3f, 4f.
+    old = {"2d": "1f", "4d": "2f", "6d": "3f", "8d": "4f"}
+    loci_res = sorted((l, old.get(r, r)) for l, r in parse_loci(p["LOCI_AND_RESOLUTIONS"]))
     return run_estimate(
         input_path=p["FILENAME_INPUT"],
         fmt=args.format.lower(),
@@ -574,6 +616,19 @@ def build_parser() -> argparse.ArgumentParser:
     data_options(h)
     run_options(h)
     h.set_defaults(func=cmd_haplomat)
+
+    r = sub.add_parser(
+        "rename",
+        help="rewrite a typing file with current IMGT/HLA names (deleted or renamed alleles updated)",
+        description=cmd_rename.__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    r.add_argument("input", help="MAC, GLSC or family table")
+    r.add_argument("output", help="file to write; a <output>.renames.tsv table of changes is written beside it")
+    r.add_argument("--format", choices=["mac", "glsc", "families"], help="default: guess from the extension")
+    r.add_argument("--data-dir")
+    r.add_argument("--imgt-dir", help="IMGT/HLA folder with Allelelist.txt and Deleted_alleles.txt")
+    r.set_defaults(func=cmd_rename)
 
     s = sub.add_parser("summary", help="summarise an input file without estimating")
     s.add_argument("input")

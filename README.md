@@ -134,7 +134,7 @@ The other example table, `validated.csv`, has 6 families and no flags.
 Missing typings are always allowed: empty cells, or `-`, `.`, `NA`, `N/A`, `?`. A locus with neither allele typed is *untyped* and is used in the estimate as such (see [Methods](#methods)). A locus with one allele typed and the other blank is read following HLA reporting practice:
 
 - **Classical loci** (A, B, C, DRB1, DQA1, DQB1, DPA1, DPB1, and any other locus except DRB3/4/5): the person is homozygous, and the typed allele is copied across. With `--half-typed unknown` the blank is kept as an unknown allele instead (*half-typed*, also used in the estimate).
-- **DRB3, DRB4, DRB5**: these genes are carried with particular DRB1 groups (DR52: DRB1\*03, 11, 12, 13, 14 carry DRB3; DR53: DRB1\*04, 07, 09 carry DRB4; DR51: DRB1\*15, 16 carry DRB5; DRB1\*01, 08 and 10 carry none). From the person's DRB1 typing, each gene copy that cannot be present is set to the absent-gene code `DRBx*NNNN`, a single typed allele where two copies are expected is read as homozygous, and an expected copy that was not typed stays unknown. `NNNN` may also be written in the input. Nothing is filled when DRB1 is untyped or its candidates span several groups. `--no-drb345` turns these rules off; a blank DRB3/4/5 cell is then never copied.
+- **DRB3, DRB4, DRB5**: these genes are carried with particular DRB1 groups (DR52: DRB1\*03, 11, 12, 13, 14 carry DRB3; DR53: DRB1\*04, 07, 09 carry DRB4; DR51: DRB1\*15, 16 carry DRB5; DRB1\*01, 08 and 10 carry none). From the person's DRB1 typing, each gene copy that cannot be present is set to the absent-gene code `DRBx*NNNN`, a single typed allele where two copies are expected is read as homozygous, the same allele written twice where only one copy is expected is read as one copy (a common way of reporting a single copy), and an expected copy that was not typed stays unknown. `NNNN` may also be written in the input. Nothing is filled when DRB1 is untyped or its candidates span several groups. Typings with more copies than DRB1 allows are left as typed and counted as conflicts. `--no-drb345` turns these rules off; a blank DRB3/4/5 cell is then never copied.
 
 Every fill is counted per locus on screen and in `run.json`.
 
@@ -202,6 +202,7 @@ uv run hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]   # populat
 uv run hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]   # family data
 uv run hlahaplotools haplomat  MAC|GLSC PARAMETER_FILE                 # run from a parameter file
 uv run hlahaplotools summary   INPUT                                   # describe an input file
+uv run hlahaplotools rename    INPUT OUTPUT                            # update retired allele names
 ```
 
 Options for `estimate` and `families`:
@@ -225,7 +226,9 @@ Options for `estimate` and `families`:
 | `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families         |
 | `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                    |
 
-`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
+`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
+
+`rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
 The exit status is 0 on success and 2 if the EM did not converge.
 
@@ -262,7 +265,7 @@ nom = h.Nomenclature("data/derived/3.66.0")
 # Population data
 ds = h.read_mac("examples/population/population.dat", mac_codes="data/mac/alpha.v3.txt")
 ds.sample(3)  # {'A': 'A*02:1192+A*02:1192', ...}  (written with the second allele blank)
-ds.fill_counts()  # {'A': {'homozygous': 124, 'absent_gene': 0, 'drb_completed': 0}, ...}
+ds.fill_counts()  # {'A': {'homozygous': 124, 'absent_gene': 0, ...}, ...}
 ds.missing_counts()  # untyped samples per locus
 h.read_mac("examples/population/population.dat", half_typed="unknown")  # keep blanks unknown
 est = h.estimate(ds, nom, {"A": "g", "C": "g", "B": "g", "DRB1": "g", "DQB1": "g"}, epsilon=1e-6)

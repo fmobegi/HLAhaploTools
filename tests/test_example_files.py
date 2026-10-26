@@ -74,7 +74,8 @@ def test_blank_second_allele_means_homozygous_by_default(tmp_path):
     assert ds.sample(0)["A"] == "A*01:01+A*01:01"
     assert ds.sample(1)["A"] is None  # a fully blank locus stays untyped
     assert ds.one_allele_counts() == {"A": 0, "B": 0}
-    assert ds.fill_counts() == {"A": {"homozygous": 1, "absent_gene": 0, "drb_completed": 0}}
+    assert ds.fill_counts()["A"]["homozygous"] == 1
+    assert set(ds.fill_counts()) == {"A"}
     with pytest.raises(ValueError):
         h.read_mac(f, half_typed="maybe")
 
@@ -97,9 +98,28 @@ def test_drb345_follow_drb1(tmp_path):
     assert ds.sample(1)["DRB3"] == "DRB3*02:02+DRB3*02:02"
     assert ds.sample(2)["DRB3"] == "DRB3*NNNN+DRB3*NNNN"
     fills = ds.fill_counts()
-    assert fills["DRB3"] == {"homozygous": 1, "absent_gene": 2, "drb_completed": 1}
+    assert fills["DRB3"] == {
+        "homozygous": 1,
+        "absent_gene": 2,
+        "drb_completed": 1,
+        "duplicate_read_as_one": 0,
+        "drb1_conflicts": 0,
+    }
     assert fills["DRB5"]["absent_gene"] == 6
-    # Without the rules a blank DRB3/4/5 is left as it is, never copied.
+    # A single DRB3/4/5 copy written twice is read as one copy.
+    g = tmp_path / "y.dat"
+    g.write_text(
+        "id\tDRB1\tDRB1\tDRB3\tDRB3\tDRB4\tDRB4\n"
+        "1\t01:01\t11:01\t02:02\t02:02\t\t\n"  # one DRB3 copy, written twice
+        "2\t03:01\t11:01\t02:02\t02:02\t\t\n"  # two DRB3 copies: homozygous
+        "3\t01:01\t08:01\t\t\t01:01\t01:01\n"  # DRB4 typed, DRB1 allows none
+    )
+    dup = h.read_mac(g)
+    assert dup.sample(0)["DRB3"] == "DRB3*02:02+DRB3*NNNN"
+    assert dup.sample(1)["DRB3"] == "DRB3*02:02+DRB3*02:02"
+    assert dup.sample(2)["DRB4"] == "DRB4*01:01+DRB4*01:01"
+    assert dup.fill_counts()["DRB3"]["duplicate_read_as_one"] == 1
+    assert dup.fill_counts()["DRB4"]["drb1_conflicts"] == 1
     raw = h.read_mac(f, drb345=False)
     assert raw.sample(0)["DRB3"] == "DRB3*01:01+"
     assert raw.sample(2)["DRB3"] is None
