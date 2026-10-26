@@ -708,7 +708,7 @@ pub(crate) fn phase_one(
         .map(|l| ds.loci[l].clone())
         .collect();
 
-    let children_out = children
+    let mut children_out: Vec<ChildInheritance> = children
         .iter()
         .enumerate()
         .map(|(i, &c)| {
@@ -744,6 +744,33 @@ pub(crate) fn phase_one(
     if best.len() > 1 {
         notes.push(format!("{} equally good inheritance patterns", best.len()));
     }
+    // A parent who carries the same haplotype twice passes that haplotype to
+    // every child, so "which of the two" has no answer; report A (or C).
+    for (p, role) in [(0, "father"), (1, "mother")] {
+        if !carries_one_haplotype_twice(&result[p]) {
+            continue;
+        }
+        let label = HAPLOTYPE_LABELS[p][0];
+        let mut changed = false;
+        for child in &mut children_out {
+            let side = if p == 0 {
+                &mut child.paternal
+            } else {
+                &mut child.maternal
+            };
+            if side.is_none() {
+                *side = Some(label);
+                changed = true;
+            }
+        }
+        if changed {
+            let other = HAPLOTYPE_LABELS[p][1];
+            notes.push(format!(
+                "the {role}'s haplotypes {label} and {other} are identical at every typed locus: \
+                 every child is reported as receiving {label}"
+            ));
+        }
+    }
     FamilyPhase {
         family: fam.id.clone(),
         father: fam.father.map(|i| ds.samples[i].id.clone()),
@@ -756,6 +783,21 @@ pub(crate) fn phase_one(
         notes,
         parents: result,
     }
+}
+
+/// True when a parent's two haplotypes are known and identical at every locus
+/// where anything is known about them (at least one), i.e. the parent carries
+/// the same haplotype twice.
+fn carries_one_haplotype_twice(loci: &[ParentLocus]) -> bool {
+    let mut seen = false;
+    for pl in loci {
+        match *pl {
+            ParentLocus::Phased(x, y) if x != WILD && x == y => seen = true,
+            ParentLocus::Unknown => {}
+            _ => return false, // different alleles, unknown phase, or one side unknown
+        }
+    }
+    seen
 }
 
 /// Phase every family at the target resolution.
@@ -1088,6 +1130,44 @@ mod tests {
         assert_eq!(p.haplotypes[2], "A*03:01~B*35:01");
         assert_eq!(p.haplotypes[1], "A*02:01~B*08:01");
         assert_eq!(p.haplotypes[3], "A*11:01~B*44:02");
+    }
+
+    #[test]
+    fn parent_carrying_one_haplotype_twice_gives_a_to_every_child() {
+        // The father carries 01:01~07:02 twice; the mother is heterozygous.
+        let table = "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2\n\
+            f1,F,01:01,01:01,07:02,07:02\n\
+            f1,M,03:01,11:01,35:01,44:02\n\
+            f1,C1,01:01,03:01,07:02,35:01\n\
+            f1,C2,01:01,11:01,07:02,44:02\n\
+            f1,C3,01:01,03:01,07:02,35:01\n";
+        let (ds, ped) = load(table);
+        let p = &phase_families(&ds, &ped, &Nomenclature::default(), &as_is(&ds)).unwrap()[0];
+        let labels: Vec<String> = p.children.iter().map(ChildInheritance::labels).collect();
+        assert_eq!(labels, ["AC", "AD", "AC"]);
+        assert_eq!(p.haplotypes[0], p.haplotypes[1]);
+        assert!(
+            p.notes
+                .iter()
+                .any(|n| n.contains("father's haplotypes A and B are identical")),
+            "{:?}",
+            p.notes
+        );
+    }
+
+    #[test]
+    fn partly_homozygous_parent_is_resolved_by_other_loci() {
+        // The father is homozygous at A (01:01) but not at B: B decides.
+        let table = "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2\n\
+            f1,F,01:01,01:01,07:02,08:01\n\
+            f1,M,03:01,11:01,35:01,44:02\n\
+            f1,C1,01:01,03:01,07:02,35:01\n\
+            f1,C2,01:01,11:01,08:01,44:02\n";
+        let (ds, ped) = load(table);
+        let p = &phase_families(&ds, &ped, &Nomenclature::default(), &as_is(&ds)).unwrap()[0];
+        let labels: Vec<String> = p.children.iter().map(ChildInheritance::labels).collect();
+        assert_eq!(labels, ["AC", "BD"]);
+        assert!(!p.notes.iter().any(|n| n.contains("identical")));
     }
 
     #[test]

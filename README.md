@@ -2,6 +2,8 @@
 
 HLAhaploTools estimates HLA haplotype frequencies from population and family typing data with an expectation–maximisation (EM) algorithm. It has a Rust core, a Python API and a command line (`hlahaplotools`).
 
+## Key strengths
+
 - **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release.
 - **Any target resolution** per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
 - **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
@@ -49,7 +51,7 @@ uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC t
 This writes `data/`:
 
 | Path | Contents |
-|---|---|
+| --- | --- |
 | `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt` |
 | `derived/<release>/` | Lookup tables used for resolution: `AllAllelesExpanded.txt`, `LargeG.txt`, `P.txt`, `Smallg.txt` |
 | `mac/alpha.v3.txt` | NMDP multiple-allele codes |
@@ -86,7 +88,7 @@ Wrote 180 haplotypes to results/population/hfs.dat (details in results/populatio
 The most frequent haplotypes in `results/population/hfs.dat`, with the true frequencies used in the simulation:
 
 | Haplotype (g resolution) | Estimated | True |
-|---|---|---|
+| --- | --- | --- |
 | `A*02:1192~C*08:150~B*53:31~DRB1*08:81~DQB1*05:66` | 0.2265 | 0.2128 |
 | `A*11:81~C*03:03g~B*35:61~DRB1*13:165~DQB1*04:24` | 0.0989 | 0.0993 |
 | `A*32:136~C*15:05g~B*52:82~DRB1*04:231~DQB1*05:01g` | 0.0665 | 0.0636 |
@@ -130,9 +132,9 @@ Missing typings are always allowed: empty cells, or `-`, `.`, `NA`, `N/A`, `?`. 
 Tab-separated, with a header naming each locus twice. Typings have no locus prefix and may be alleles, groups or NMDP multiple-allele codes:
 
 ```text
-id	A	A	B	B	DRB1	DRB1
-s1	01:01	24:DXTW	08:01	07:02	03:01	15:01
-s2	02:01	02:01	44:02		04:01	07:01
+id A A B B DRB1 DRB1
+s1 01:01 24:DXTW 08:01 07:02 03:01 15:01
+s2 02:01 02:01 44:02  04:01 07:01
 ```
 
 `s2` is half-typed at B. Codes such as `01:XX` mean "any allele in family A*01". MAC codes need the MAC table, which is found automatically through `data/manifest.json` or given with `--mac-codes`.
@@ -142,8 +144,8 @@ s2	02:01	02:01	44:02		04:01	07:01
 One person per line: an ID, then one GL string per locus in any order, separated by whitespace. `|` separates alternative genotypes, `+` the two alleles, `/` alternative alleles:
 
 ```text
-1	A*01:01+A*02:01/A*02:02	B*08:01+B*07:02	DRB1*13:01+DRB1*04:01|DRB1*13:02+DRB1*04:04
-2	A*03:01+	DRB1*15:01+DRB1*15:01
+1 A*01:01+A*02:01/A*02:02 B*08:01+B*07:02 DRB1*13:01+DRB1*04:01|DRB1*13:02+DRB1*04:04
+2 A*03:01+ DRB1*15:01+DRB1*15:01
 ```
 
 A locus left out of a line is untyped (`2` has no B); `A*03:01+` is half-typed.
@@ -170,7 +172,7 @@ fam01,C1,A*01:01,A*03:01,B*08:01,B*35:01,DRB1*03:01,DRB1*04:01
 Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g. `--loci A:g,B:g,DRB1:2f`):
 
 | Code | Target | Example for `A*02:01:01:01` |
-|---|---|---|
+| --- | --- | --- |
 | `1f` | First field | `A*02` |
 | `2f` | Two fields | `A*02:01` |
 | `3f` | Three fields | `A*02:01:01` |
@@ -194,7 +196,7 @@ uv run hlahaplotools summary   INPUT                                   # describ
 Options for `estimate` and `families`:
 
 | Option | Default | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `--loci` | required | Loci and resolutions, e.g. `A:g,C:g,B:g,DRB1:g` |
 | `-o`, `--output` | `results` | Output folder |
 | `--format` | from extension | `mac` or `glsc` (`estimate` only) |
@@ -219,7 +221,7 @@ The exit status is 0 on success and 2 if the EM did not converge.
 ### `estimate`
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | `hfs.dat` | `haplotype<TAB>frequency`, most frequent first. Alleles are joined with `~` in the order given by `--loci`. |
 | `epsilon.dat` | One line per iteration: largest frequency change, log-likelihood |
 | `run.json` | Tool version, input, loci and resolutions, IMGT/HLA release, MAC table date, all parameters, numbers of samples read, used and incomplete, iterations, log-likelihood, timings, and every unreadable line and left-out sample with the reason |
@@ -227,7 +229,7 @@ The exit status is 0 on success and 2 if the EM did not converge.
 ### `families`
 
 | File | Contents |
-|---|---|
+| --- | --- |
 | `flags.tsv` | Pedigree problems: family, member, relative, kind, loci, explanation (see [Pedigree checks](#pedigree-checks)) |
 | `mendel.tsv` | Per child and locus: typing that cannot come from the parents; families that cannot be phased |
 | `phases.tsv` | Per family: phasing status, the father's haplotypes `hap_A` and `hap_B` and the mother's `hap_C` and `hap_D` (`LOCUS*?` where unknown), inconsistent and ambiguous loci, notes |
@@ -283,7 +285,7 @@ A sample untyped at a locus is consistent with any allele there; a sample typed 
 
 ### Family phasing
 
-The father's two haplotypes are labelled A and B, the mother's C and D. Children are taken in order of their member number (`C`, `C1`, `C2`, …, `C10`), whatever the row order in the file, and the lowest-numbered typed child defines the labels: it inherits A from the father and C from the mother. Every other child is then described as A or B plus C or D (e.g. `BC`).
+The father's two haplotypes are labelled A and B, the mother's C and D. Children are taken in order of their member number (`C`, `C1`, `C2`, …, `C10`), whatever the row order in the file, and the lowest-numbered typed child defines the labels: it inherits A from the father and C from the mother. Every other child is then described as A or B plus C or D (e.g. `BC`). Inheritance is decided from all loci together, so a parent homozygous at some loci is resolved by the loci where its haplotypes differ. A parent whose two haplotypes are identical at every typed locus passes the same haplotype to every child; its children are then all reported as receiving A (father) or C (mother), with a note. A side stays `?` only when the data cannot decide it, for example when both parents carry the same two haplotypes and a child has one of each.
 
 For each family, every way the children could have inherited one haplotype from each parent is tried (up to the 8 lowest-numbered children), and the inheritance patterns that explain the most loci are kept. At each locus the parental alleles consistent with every kept pattern are collected: a parent's alleles are assigned to haplotypes where all patterns agree, and left unknown (`LOCUS*?`) otherwise. An untyped parent is rebuilt from the children as far as they show it; when neither parent is typed, which rebuilt parent is the father is arbitrary. Loci no pattern explains are reported as inconsistent (typing error or recombination). All comparisons are made at the target resolution.
 
@@ -294,7 +296,7 @@ Relatives share haplotypes, so only founders (parents, typed or rebuilt) enter t
 ### Pedigree checks
 
 | Kind | Meaning |
-|---|---|
+| --- | --- |
 | `parent_excluded` | The child shares no allele with a parent at 2 or more loci: not that parent's child, or a sample swap |
 | `single_locus_mismatch` | One locus does not fit: usually a typing error, null allele or mutation |
 | `trio_inconsistent` | Each parent fits alone, but no allele from each explains the child |
@@ -319,7 +321,7 @@ All results below are reproducible with the scripts in [scripts/](scripts). Simu
 `uv run python scripts/validate_missing.py` — 5,000 people, 5 loci, 300 true haplotypes, 3 replicates (mean ± standard deviation). C and DQB1 are left untyped at the given rate; "drop incomplete" estimates from fully typed people only.
 
 | C and DQB1 untyped | People left if dropped | Error, all people | Error, drop incomplete | Error, before blanking |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 5% | 4,516 | 0.049 ± 0.001 | 0.052 ± 0.001 | 0.049 ± 0.001 |
 | 20% | 3,219 | 0.051 ± 0.004 | 0.060 ± 0.004 | 0.050 ± 0.003 |
 | 40% | 1,820 | 0.050 ± 0.003 | 0.081 ± 0.002 | 0.046 ± 0.003 |
@@ -331,7 +333,7 @@ With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.049 
 `uv run python scripts/validate_family_estimates.py` — 1,000 families of 1–4 children per replicate, 10% of parents untyped, DQB1 20% untyped.
 
 | Replicate | Founders, family phase | Founders, unphased | Everyone as unrelated |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | 0.076 | 0.080 | 0.084 |
 | 2 | 0.078 | 0.083 | 0.085 |
 | 3 | 0.078 | 0.082 | 0.082 |
@@ -343,7 +345,7 @@ Treating every family member as unrelated also counts about 4,300 people for abo
 `uv run python scripts/validate_pedigrees.py examples/families/*.csv` — the 9 example families, 18 loci at 2-field resolution. Each family is phased with all members as the reference, then again with members left out; called parental alleles are compared with the reference. Family3 is excluded from these figures because of its copied row.
 
 | Scenario | Correct | Wrong | Alleles called |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Both parents and one child (21 trios) | 999 | 0 | 94.7% |
 | One parent left out, 2 children (rebuilt parent) | 708 | 0 | 73.9% |
 | One parent left out, 3 children (rebuilt parent) | 276 | 0 | 96.2% |
@@ -355,7 +357,7 @@ Every recovered allele of a rebuilt parent (1,026) is part of that parent's actu
 `uv run python scripts/validate_audit.py --seed 1` (and `--seed 2`) — 2,000 families of 2–4 children, 6 loci, 15% of parents untyped, with problems planted in some children.
 
 | Planted problem | Both parents typed | A parent untyped |
-|---|---|---|
+| --- | --- | --- |
 | Child from another father | 86–93% flagged | 51–67% |
 | Child's row copied from the mother | 84–89% | 86–93% |
 | Recombinant child | 80–84% | 41–49% |
@@ -382,7 +384,7 @@ uv run ruff check . && cargo clippy --all-targets
 Tests that need the reference data are skipped until `scripts/build_nomenclature.py` has been run.
 
 | Path | Contents |
-|---|---|
+| --- | --- |
 | `crates/hlahaplotools-core/` | Rust core: parsers, MAC codes, nomenclature tables, resolution, EM, families, pedigree checks, output |
 | `src/lib.rs` | Python bindings (`hlahaplotools._core`) |
 | `src/hlahaplotools/` | Python package and command line |
