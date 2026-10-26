@@ -230,8 +230,8 @@ The exit status is 0 on success and 2 if the EM did not converge.
 |---|---|
 | `flags.tsv` | Pedigree problems: family, member, relative, kind, loci, explanation (see [Pedigree checks](#pedigree-checks)) |
 | `mendel.tsv` | Per child and locus: typing that cannot come from the parents; families that cannot be phased |
-| `phases.tsv` | Per family: phasing status and the four parental haplotypes (`LOCUS*?` where unknown), inconsistent and ambiguous loci, notes |
-| `children.tsv` | Which parental haplotype (0 or 1) each child received from each parent |
+| `phases.tsv` | Per family: phasing status, the father's haplotypes `hap_A` and `hap_B` and the mother's `hap_C` and `hap_D` (`LOCUS*?` where unknown), inconsistent and ambiguous loci, notes |
+| `children.tsv` | Per child, in child-number order: `paternal` (A or B), `maternal` (C or D) and both together (e.g. `BC`); `?` where the data do not decide |
 | `hfs.dat`, `epsilon.dat` | Haplotype frequencies estimated from founders only |
 | `diplotypes.tsv` | Most likely haplotype pair per founder, with its posterior probability |
 | `comparison.json` | EM on founders as unrelated people compared with the family phasing (meaningful for larger cohorts) |
@@ -260,6 +260,8 @@ fam = h.read_family_table("examples/families/validated.csv", loci=loci)
 h.audit_families(fam, nom, "2f")  # pedigree problems
 h.check_mendelian(fam, nom, "2f")  # per-locus Mendel failures
 phases = h.phase_families(fam, nom, "2f")  # one FamilyPhase per family
+phases[0].labelled_haplotypes  # {"A": ..., "B": ..., "C": ..., "D": ...}
+phases[0].children  # [("25-FS-5/C1", "A", "C"), ("25-FS-5/C2", "A", "D"), ...]
 est, phases = h.estimate_families(fam, nom, "2f")
 ```
 
@@ -281,7 +283,9 @@ A sample untyped at a locus is consistent with any allele there; a sample typed 
 
 ### Family phasing
 
-For each family, every way the children could have inherited one haplotype from each parent is tried (up to the first 8 children), and the inheritance patterns that explain the most loci are kept. At each locus the parental alleles consistent with every kept pattern are collected: a parent's alleles are assigned to haplotypes where all patterns agree, and left unknown (`LOCUS*?`) otherwise. An untyped parent is rebuilt from the children as far as they show it; when neither parent is typed, which rebuilt parent is the father is arbitrary. Loci no pattern explains are reported as inconsistent (typing error or recombination). All comparisons are made at the target resolution.
+The father's two haplotypes are labelled A and B, the mother's C and D. Children are taken in order of their member number (`C`, `C1`, `C2`, …, `C10`), whatever the row order in the file, and the lowest-numbered typed child defines the labels: it inherits A from the father and C from the mother. Every other child is then described as A or B plus C or D (e.g. `BC`).
+
+For each family, every way the children could have inherited one haplotype from each parent is tried (up to the 8 lowest-numbered children), and the inheritance patterns that explain the most loci are kept. At each locus the parental alleles consistent with every kept pattern are collected: a parent's alleles are assigned to haplotypes where all patterns agree, and left unknown (`LOCUS*?`) otherwise. An untyped parent is rebuilt from the children as far as they show it; when neither parent is typed, which rebuilt parent is the father is arbitrary. Loci no pattern explains are reported as inconsistent (typing error or recombination). All comparisons are made at the target resolution.
 
 ### Estimation from families
 
@@ -296,7 +300,7 @@ Relatives share haplotypes, so only founders (parents, typed or rebuilt) enter t
 | `trio_inconsistent` | Each parent fits alone, but no allele from each explains the child |
 | `possible_duplicate` | A child identical to a parent at 90% or more of loci that also fails to fit the other parent (a copied row), or two identical parents |
 | `not_full_sibling` | With a parent untyped, a child carries alleles the other children's parents could not also have passed on. If any of several children could be the odd one out, one family-level flag names them all |
-| `recombination` | The child's inheritance from one parent switches once along chromosome 6; the interval is given |
+| `recombination` | The child's inheritance from one parent switches once along chromosome 6 (e.g. haplotype A at A and B, haplotype B at DRB1); the interval is given |
 | `inheritance_mismatch` | The inheritance switches several times, or the child lacks alleles an untyped parent must have |
 | `structure` | Unknown member roles, a second father or mother, typings that cannot be resolved |
 

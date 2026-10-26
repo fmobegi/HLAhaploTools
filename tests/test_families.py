@@ -191,6 +191,11 @@ def test_families_cli(sim, tmp_path):
         assert (res / name).exists(), name
     info = json.loads((res / "run.json").read_text())
     assert info["families"] == 200
+    children = [l.split("\t") for l in (res / "children.tsv").read_text().splitlines()]
+    assert children[0] == ["family", "child", "paternal", "maternal", "haplotypes"]
+    assert all(r[2] in "AB?" and r[3] in "CD?" and r[4] == r[2] + r[3] for r in children[1:])
+    phases_header = (res / "phases.tsv").read_text().splitlines()[0].split("\t")
+    assert phases_header[4:8] == ["hap_A", "hap_B", "hap_C", "hap_D"]
     # No per-locus Mendel failures in clean data; a few families with no typed
     # parents and a single child are reported as unphasable, which is correct.
     mendel_rows = [l.split("\t") for l in (res / "mendel.tsv").read_text().splitlines()[1:]]

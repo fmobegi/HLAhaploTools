@@ -131,9 +131,33 @@ impl Pedigree {
                 *slot = Some(i);
             }
         }
+        // Children in birth-label order (C, C1, C2, ..., C10), whatever the row
+        // order: the lowest-numbered child defines haplotypes A and C.
+        if let Some(members) = &ids.member {
+            for family in &mut ped.families {
+                family.children.sort_by_key(|&c| child_number(&members[c]));
+            }
+        }
         ped
     }
 }
+
+/// The number in a child label (`C2` -> 2, `Child10` -> 10); 0 when there is none.
+pub fn child_number(label: &str) -> u64 {
+    let digits: String = label
+        .trim()
+        .chars()
+        .rev()
+        .take_while(char::is_ascii_digit)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    digits.parse().unwrap_or(0)
+}
+
+/// Labels of a parent's two haplotypes: A/B for the father, C/D for the mother.
+pub const HAPLOTYPE_LABELS: [[char; 2]; 2] = [['A', 'B'], ['C', 'D']];
 
 /// Read a family table (see [`crate::parse::read_table`] for the layout).
 pub fn read_family_table(
@@ -303,13 +327,24 @@ pub enum PhaseStatus {
     Failed(String),
 }
 
-/// Which parental haplotype (0 or 1) a child received from each parent.
+/// Which parental haplotype a child received from each parent: `A` or `B`
+/// from the father, `C` or `D` from the mother.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChildInheritance {
     pub sample_id: String,
     /// `None` if the data does not decide it.
-    pub paternal: Option<u8>,
-    pub maternal: Option<u8>,
+    pub paternal: Option<char>,
+    pub maternal: Option<char>,
+}
+
+impl ChildInheritance {
+    /// Both labels as text, e.g. `"AC"`, or `"B?"` when the maternal one is undecided.
+    pub fn labels(&self) -> String {
+        [self.paternal, self.maternal]
+            .iter()
+            .map(|c| c.unwrap_or('?'))
+            .collect()
+    }
 }
 
 /// Phasing result for one family.
@@ -319,9 +354,9 @@ pub struct FamilyPhase {
     /// Sample IDs of the typed parents (`None` if not typed).
     pub father: Option<String>,
     pub mother: Option<String>,
-    /// Father haplotype 1, father 2, mother 1, mother 2, named like
-    /// [`Estimate::haplotypes`]; unknown loci appear as `LOCUS*?`.
-    /// Haplotype 1 of each parent is the one the first child received.
+    /// Haplotypes A and B (father) and C and D (mother), named like
+    /// [`Estimate::haplotypes`]; unknown loci appear as `LOCUS*?`. A and C
+    /// are the haplotypes the lowest-numbered typed child received.
     pub haplotypes: [String; 4],
     pub children: Vec<ChildInheritance>,
     /// Loci no inheritance pattern explains (typing error or recombination).
@@ -542,7 +577,8 @@ pub(crate) fn phase_one(
         })
         .collect();
 
-    // Search inheritance assignments; the first child defines haplotype 1 of each parent.
+    // Search inheritance assignments. Children are in label order, so the
+    // lowest-numbered typed child defines haplotypes A (father) and C (mother).
     let k = used.len();
     let mut best_score = 0usize;
     let mut best: Vec<Vec<u8>> = Vec::new();
@@ -685,10 +721,11 @@ pub(crate) fn phase_one(
                     .all(|a| (a[i] >> shift) & 1 == first)
                     .then_some(first)
             };
+            let [paternal, maternal] = HAPLOTYPE_LABELS;
             ChildInheritance {
                 sample_id: ds.samples[c].id.clone(),
-                paternal: decided(1),
-                maternal: decided(0),
+                paternal: decided(1).map(|h| paternal[h as usize]),
+                maternal: decided(0).map(|h| maternal[h as usize]),
             }
         })
         .collect();
@@ -1025,8 +1062,45 @@ mod tests {
                 "A*11:01~B*44:02".to_string()
             ]
         );
-        assert_eq!(p.children[1].paternal, Some(1));
-        assert_eq!(p.children[1].maternal, Some(1));
+        assert_eq!(p.children[0].labels(), "AC");
+        assert_eq!(p.children[1].paternal, Some('B'));
+        assert_eq!(p.children[1].maternal, Some('D'));
+    }
+
+    #[test]
+    fn lowest_numbered_child_defines_a_and_c_whatever_the_row_order() {
+        // Same family as TRIO plus C3, with rows in the order C3, F, C2, M, C1.
+        // C1 must get A and C, and the children come back in label order.
+        let table = "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2\n\
+            f1,C3,02:01,03:01,08:01,35:01\n\
+            f1,F,01:01,02:01,07:02,08:01\n\
+            f1,C2,02:01,11:01,08:01,44:02\n\
+            f1,M,03:01,11:01,35:01,44:02\n\
+            f1,C1,01:01,03:01,07:02,35:01\n";
+        let (ds, ped) = load(table);
+        let p = &phase_families(&ds, &ped, &Nomenclature::default(), &as_is(&ds)).unwrap()[0];
+        let order: Vec<&str> = p.children.iter().map(|c| c.sample_id.as_str()).collect();
+        assert_eq!(order, ["f1/C1", "f1/C2", "f1/C3"]);
+        let labels: Vec<String> = p.children.iter().map(ChildInheritance::labels).collect();
+        assert_eq!(labels, ["AC", "BD", "BC"]);
+        // A and C are C1's haplotypes.
+        assert_eq!(p.haplotypes[0], "A*01:01~B*07:02");
+        assert_eq!(p.haplotypes[2], "A*03:01~B*35:01");
+        assert_eq!(p.haplotypes[1], "A*02:01~B*08:01");
+        assert_eq!(p.haplotypes[3], "A*11:01~B*44:02");
+    }
+
+    #[test]
+    fn child_numbers_sort_numerically() {
+        assert_eq!(child_number("C"), 0);
+        assert_eq!(child_number("C2"), 2);
+        assert_eq!(child_number("C10"), 10);
+        assert_eq!(child_number("Child_3"), 3);
+        let (_, ped) = load(
+            "FAMILY_ID,Family_Member,A_1,A_2\n\
+             f1,C10,01:01,01:01\nf1,C2,01:01,01:01\nf1,C,01:01,01:01\nf1,C1,01:01,01:01\n",
+        );
+        assert_eq!(ped.families[0].children, vec![2, 3, 1, 0]); // C, C1, C2, C10
     }
 
     #[test]

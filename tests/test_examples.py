@@ -47,6 +47,33 @@ def test_only_family3_c1_is_flagged(cleaned):
     assert dup["relative"] == "Family3/M"
 
 
+def test_c1_defines_haplotypes_a_and_c_even_when_listed_later(nom):
+    """In family_typing_data.csv, Family1 lists C2 first and Family2 lists C3 first.
+
+    Haplotype labels must still be anchored on C1: C1 inherits A (father) and C (mother).
+    """
+    loci = ["A", "C", "B", "DRB1", "DQA1", "DQB1", "DPA1", "DPB1"]
+    data = h.read_family_table(EXAMPLES / "family_typing_data.csv", loci=loci)
+    phases = {p.family: p for p in h.phase_families(data, nom, "2f")}
+    expected = {
+        "Family1": [("Family1/C1", "A", "C"), ("Family1/C2", "B", "C"), ("Family1/C3", "A", "D")],
+        "Family2": [("Family2/C1", "A", "C"), ("Family2/C2", "B", "D"), ("Family2/C3", "B", "D")],
+    }
+    for fam, children in expected.items():
+        assert phases[fam].children == children
+        labelled = phases[fam].labelled_haplotypes
+        assert set(labelled) == {"A", "B", "C", "D"}
+        assert labelled["A"] == phases[fam].haplotypes[0] and labelled["D"] == phases[fam].haplotypes[3]
+    # Family1/C1 carries A*30:02 from the father and A*26:01 from the mother.
+    assert phases["Family1"].labelled_haplotypes["A"].startswith("A*30:02~")
+    assert phases["Family1"].labelled_haplotypes["C"].startswith("A*26:01~")
+
+
+@pytest.fixture(scope="module")
+def nom():
+    return h.Nomenclature(str(DERIVED))
+
+
 def test_examples_phase_without_inconsistencies_except_family3(cleaned):
     data, nom, res = cleaned
     phases = h.phase_families(data, nom, res)

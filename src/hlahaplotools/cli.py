@@ -288,8 +288,9 @@ def cmd_families(args) -> int:
     flags.tsv        pedigree problems: excluded parents, duplicated rows,
                      non-siblings, recombinants, single-locus mismatches
     mendel.tsv       children whose typing cannot come from their parents
-    phases.tsv       each family's four parental haplotypes (LOCUS*? = unknown)
-    children.tsv     which haplotype each child inherited from each parent
+    phases.tsv       each family's parental haplotypes: A and B (father), C and D
+                     (mother); A and C are the lowest-numbered child's. LOCUS*? = unknown
+    children.tsv     each child's haplotypes: A or B from the father, C or D from the mother
     hfs.dat          haplotype frequencies from founders (parents) only
     epsilon.dat      EM convergence trace
     diplotypes.tsv   most likely haplotype pair per founder
@@ -361,10 +362,10 @@ def cmd_families(args) -> int:
             "father",
             "mother",
             "status",
-            "father_hap1",
-            "father_hap2",
-            "mother_hap1",
-            "mother_hap2",
+            "hap_A",
+            "hap_B",
+            "hap_C",
+            "hap_D",
             "inconsistent_loci",
             "ambiguous_loci",
             "notes",
@@ -385,8 +386,12 @@ def cmd_families(args) -> int:
     )
     _tsv(
         out / "children.tsv",
-        ["family", "child", "paternal_haplotype", "maternal_haplotype"],
-        ([p.family, c, pat, mat] for p in phases for c, pat, mat in p.children),
+        ["family", "child", "paternal", "maternal", "haplotypes"],
+        (
+            [p.family, c, pat or "?", mat or "?", f"{pat or '?'}{mat or '?'}"]
+            for p in phases
+            for c, pat, mat in p.children
+        ),
     )
 
     est.write_frequencies(str(out / "hfs.dat"), cut=args.cut, renormalize=not args.no_renormalize)

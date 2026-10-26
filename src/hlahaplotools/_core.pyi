@@ -103,9 +103,11 @@ class FamilyPhase:
     @property
     def mother(self) -> str | None: ...
     @property
-    def haplotypes(self) -> list[str]: ...
+    def haplotypes(self) -> list[str]: ...  # [A, B, C, D]
     @property
-    def children(self) -> list[tuple[str, int | None, int | None]]: ...
+    def labelled_haplotypes(self) -> dict[str, str]: ...  # {"A": ..., "B": ..., "C": ..., "D": ...}
+    @property
+    def children(self) -> list[tuple[str, str | None, str | None]]: ...  # (sample, "A"/"B", "C"/"D")
     @property
     def inconsistent_loci(self) -> list[str]: ...
     @property

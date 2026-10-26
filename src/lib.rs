@@ -710,18 +710,35 @@ mod _core {
         fn mother(&self) -> Option<String> {
             self.inner.mother.clone()
         }
-        /// [father 1, father 2, mother 1, mother 2]; unknown loci appear as "LOCUS*?".
+        /// Haplotypes [A, B, C, D]: A and B are the father's, C and D the mother's;
+        /// A and C are those of the lowest-numbered typed child. Unknown loci appear as "LOCUS*?".
         #[getter]
         fn haplotypes(&self) -> Vec<String> {
             self.inner.haplotypes.to_vec()
         }
-        /// (child sample ID, paternal haplotype 0/1 or None, maternal 0/1 or None).
+        /// The same haplotypes keyed by label: {"A": ..., "B": ..., "C": ..., "D": ...}.
         #[getter]
-        fn children(&self) -> Vec<(String, Option<u8>, Option<u8>)> {
+        fn labelled_haplotypes(&self) -> HashMap<String, String> {
+            ["A", "B", "C", "D"]
+                .iter()
+                .zip(&self.inner.haplotypes)
+                .map(|(l, h)| (l.to_string(), h.clone()))
+                .collect()
+        }
+        /// (child sample ID, "A"/"B" from the father, "C"/"D" from the mother),
+        /// in child-number order; None where the data do not decide.
+        #[getter]
+        fn children(&self) -> Vec<(String, Option<String>, Option<String>)> {
             self.inner
                 .children
                 .iter()
-                .map(|c| (c.sample_id.clone(), c.paternal, c.maternal))
+                .map(|c| {
+                    (
+                        c.sample_id.clone(),
+                        c.paternal.map(String::from),
+                        c.maternal.map(String::from),
+                    )
+                })
                 .collect()
         }
         #[getter]

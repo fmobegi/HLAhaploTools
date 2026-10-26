@@ -29,7 +29,8 @@ use crate::Error;
 use crate::dataset::Dataset;
 use crate::estimate::{LocusGeno, ResolvedSample, WILD, resolve_dataset};
 use crate::family::{
-    Family, ParentLocus, Pedigree, PhaseStatus, child_possible, options_text, parent_has, phase_one,
+    Family, HAPLOTYPE_LABELS, ParentLocus, Pedigree, PhaseStatus, child_possible, options_text,
+    parent_has, phase_one,
 };
 use crate::intern::{AlleleId, AlleleTable};
 use crate::nomenclature::Nomenclature;
@@ -207,6 +208,26 @@ fn siblings_possible(kids: &[Opts], father: Option<Opts>, mother: Option<Opts>) 
         false
     }
     search(&kids, 0, &mut Vec::new(), &mut Vec::new(), &fa, &ma)
+}
+
+/// Are the two haplotypes of a parent labelled the other way round in `full`
+/// than in `part` (two phasings of the same family)? Decided by the loci
+/// where both are phased and heterozygous.
+fn labels_swapped(part: &[ParentLocus], full: &[ParentLocus]) -> bool {
+    let (mut same, mut swapped) = (0, 0);
+    for (a, b) in part.iter().zip(full) {
+        if let (ParentLocus::Phased(x, y), ParentLocus::Phased(x2, y2)) = (*a, *b) {
+            if x == WILD || y == WILD || x == y {
+                continue;
+            }
+            if (x, y) == (x2, y2) {
+                same += 1;
+            } else if (x, y) == (y2, x2) {
+                swapped += 1;
+            }
+        }
+    }
+    swapped > same
 }
 
 /// Loci in chromosome order (unknown loci last, in input order).
@@ -616,6 +637,9 @@ fn audit_family(
         .map(|&(c, _)| c)
         .chain(duplicate_rows.iter().copied())
         .collect();
+    // The whole family's phasing (as written to phases.tsv) defines the
+    // A/B and C/D labels used in messages.
+    let full_phase = phase_one(fam, ds, resolved, codes);
     for &(c, cs) in &kids {
         let others: Vec<usize> = fam
             .children
@@ -674,6 +698,9 @@ fn audit_family(
             let switches: Vec<usize> = (1..seq.len())
                 .filter(|&i| seq[i].1 != seq[i - 1].1)
                 .collect();
+            // Name the haplotypes as in the whole-family phasing.
+            let flip = labels_swapped(&phase.parents[p], &full_phase.parents[p]);
+            let hap_label = |h: u8| HAPLOTYPE_LABELS[p][usize::from(h ^ u8::from(flip))];
             let label = |s: &[(usize, u8)]| {
                 s.iter()
                     .map(|&(l, _)| ds.loci[l].as_str())
@@ -693,9 +720,9 @@ fn audit_family(
                         format!(
                             "inherits the {}'s haplotype {} at {} and haplotype {} at {}: crossover between {} and {}{}",
                             role[p],
-                            before[0].1 + 1,
+                            hap_label(before[0].1),
                             label(before),
-                            after[0].1 + 1,
+                            hap_label(after[0].1),
                             label(after),
                             ds.loci[before.last().unwrap().0],
                             ds.loci[after[0].0],
@@ -847,6 +874,39 @@ mod tests {
         assert_eq!(rec[0].sample_id.as_deref(), Some("f1/C3"));
         assert_eq!(rec[0].loci, ["B", "DRB1"]);
         assert!(!flags.iter().any(|f| f.kind == FlagKind::ParentExcluded));
+        // C1 received the father's 01:01~07:02~03:01, so that is haplotype A.
+        assert!(
+            rec[0]
+                .message
+                .contains("haplotype A at A, B and haplotype B at DRB1"),
+            "{}",
+            rec[0].message
+        );
+    }
+
+    #[test]
+    fn recombination_labels_follow_the_family_even_with_rows_out_of_order() {
+        // Same family, but the recombinant C3 comes first in the file and C2
+        // before C1. Labels must still be anchored on C1.
+        let (header, body) = HEAD.split_once('\n').unwrap();
+        let rows: Vec<&str> = body.lines().collect(); // F, M, C1, C2
+        let table = format!(
+            "{header}\nf1,C3,01:01,03:01,07:02,35:01,04:01,11:01\n{}\n{}\n{}\n{}\n",
+            rows[3], rows[0], rows[1], rows[2]
+        );
+        let flags = audit(&table);
+        let rec: Vec<_> = flags
+            .iter()
+            .filter(|f| f.kind == FlagKind::Recombination)
+            .collect();
+        assert_eq!(rec.len(), 1, "{flags:?}");
+        assert!(
+            rec[0]
+                .message
+                .contains("haplotype A at A, B and haplotype B at DRB1"),
+            "{}",
+            rec[0].message
+        );
     }
 
     const NO_FATHER: &str = "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2,DRB1_1,DRB1_2\n\
