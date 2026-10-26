@@ -140,11 +140,16 @@ def run_estimate(
     if starts > 1:
         lls = [s[2] for s in start_summary]
         best = max(range(len(lls)), key=lambda k: lls[k])
-        ahead = sum(l < max(lls) - 1e-6 * abs(max(lls)) for l in lls)
-        say(
-            f"Starts: {starts}; best logL {max(lls):.6f} from start {best + 1} ({start_summary[best][0]}, "
-            f"seed {start_summary[best][1]}); worst {min(lls):.6f}; {ahead} of {starts} starts ended lower"
-        )
+        # Differences below 0.01 log units are convergence noise at the usual epsilon.
+        lower = sum(l < lls[best] - 0.01 for l in lls)
+        if lower == 0:
+            say(f"Starts: {starts}; all reached the same fit (logL within 0.01 of {lls[best]:.6f})")
+        else:
+            say(
+                f"Starts: {starts}; best logL {lls[best]:.6f} from start {best + 1} ({start_summary[best][0]}, "
+                f"seed {start_summary[best][1]}); {lower} of {starts} starts ended lower, "
+                f"the worst by {lls[best] - min(lls):.3f}"
+            )
     say(
         f"EM: {est.n_samples} samples ({est.n_samples_incomplete} incomplete), {est.n_phenotypes} genotypes, "
         f"{est.n_candidates} candidate haplotypes ({est.n_completions} filled in), "
@@ -602,8 +607,9 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument(
         "--starts",
         type=int,
-        default=1,
-        help="EM start values: --init first, then perturbed starts (seed+1, ...); the best fit is kept (default 1)",
+        default=10,
+        help="EM start values: --init first, then perturbed starts (seed+1, ...); the best fit is kept "
+        "(default 10; 1 reproduces a single Hapl-o-Mat run)",
     )
     data_options(e)
     run_options(e)

@@ -53,7 +53,7 @@ def test_cli_starts_are_recorded(tmp_path):
         capture_output=True, text=True,
     )  # fmt: skip
     assert run.returncode == 0, run.stderr
-    assert "Starts: 3; best logL" in run.stdout
+    assert "Starts: 3; " in run.stdout
     info = json.loads((tmp_path / "run.json").read_text())
     assert info["parameters"]["starts"] == 3
     assert len(info["starts"]) == 3

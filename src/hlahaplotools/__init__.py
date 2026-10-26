@@ -36,6 +36,7 @@ from hlahaplotools._core import (
     read_mac,
 )
 from hlahaplotools.cli import main
+from hlahaplotools.multistart import estimate_multistart
 
 __all__ = [
     "Dataset",
@@ -50,6 +51,7 @@ __all__ = [
     "compare_to_families",
     "estimate",
     "estimate_families",
+    "estimate_multistart",
     "main",
     "phase_families",
     "read_family_table",

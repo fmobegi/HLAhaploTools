@@ -87,7 +87,8 @@ Read 1000 samples from examples/population/population.dat (MAC); 0 lines unreada
   B      -> g      untyped:      0  one allele typed:      0
   DRB1   -> g      untyped:      0  one allele typed:      0
   DQB1   -> g      untyped:     92  one allele typed:      0
-EM: 1000 samples (92 incomplete), 625 genotypes, 13373 candidate haplotypes (4014 filled in), 15 iterations, converged=True, logL=-7085.814742
+Starts: 10; all reached the same fit (logL within 0.01 of -7085.814726)
+EM: 1000 samples (92 incomplete), 625 genotypes, 13373 candidate haplotypes (4014 filled in), 15 iterations, converged=True, logL=-7085.814726
 Wrote 205 haplotypes to results/population/hfs.dat (details in results/population/run.json)
 ```
 
@@ -215,6 +216,7 @@ Options for `estimate` and `families`:
 | `--epsilon`                                       | `1e-6`                    | Stop when no haplotype frequency changes by more than this                  |
 | `--init`                                          | `numberOccurrence`        | Start values: `numberOccurrence`, `perturbation`, `equal`, `random` |
 | `--seed`                                          | `0`                       | Seed for `perturbation` and `random`                                    |
+| `--starts`                                        | `10`                      | EM start values: `--init` first, then perturbed starts; the best fit is kept (`estimate` only) |
 | `--cut`                                           | `1e-6`                    | Leave out haplotypes at or below this frequency in `hfs.dat`              |
 | `--no-renormalize`                                | off                         | Do not rescale the kept frequencies to sum to 1                             |
 | `--min-genotype-frequency`                        | `1e-5`                    | Leave out a sample whose typing allows more than 1/this genotypes           |
@@ -226,7 +228,7 @@ Options for `estimate` and `families`:
 | `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families         |
 | `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                    |
 
-`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
+`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically, and the EM runs from a single start, as Hapl-o-Mat does. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
 
 `rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
@@ -269,6 +271,7 @@ ds.fill_counts()  # {'A': {'homozygous': 124, 'absent_gene': 0, ...}, ...}
 ds.missing_counts()  # untyped samples per locus
 h.read_mac("examples/population/population.dat", half_typed="unknown")  # keep blanks unknown
 est = h.estimate(ds, nom, {"A": "g", "C": "g", "B": "g", "DRB1": "g", "DQB1": "g"}, epsilon=1e-6)
+est, starts = h.estimate_multistart(ds, nom, "g", starts=10)  # best of 10 starts, as the command line does
 est.frequencies(cut=1e-6)[:3]  # [(haplotype, frequency), ...]
 est.best_diplotypes()[:3]  # [(sample, haplotype 1, haplotype 2, probability), ...]
 est.issues  # samples left out, with reasons
@@ -296,6 +299,8 @@ Each typed allele, group or MAC code is expanded to full IMGT/HLA allele names a
 ### EM algorithm
 
 Haplotype frequencies are estimated by maximum likelihood with the EM algorithm. The likelihood of a multi-locus genotype is the sum, over ordered haplotype pairs (h, h′) consistent with it, of f(h)·f(h′). The E step computes the expected number of copies of each haplotype; the M step divides by twice the number of samples. Iteration stops when no frequency changes by more than `epsilon`; frequencies below 1e-14 are set to zero. Start values are either haplotype occurrence counts over all phase combinations (`numberOccurrence`, the default), those counts with up to 10% seeded noise (`perturbation`), equal frequencies, or seeded random frequencies.
+
+The EM converges to a stationary point near its start, which need not be the maximum. On data with several loci or many rare haplotypes, the occurrence-count start often stops on a symmetric point far below it: when the possible haplotypes of a person are carried by nobody else, an even start stays even. `estimate` therefore runs 10 starts by default: the `--init` start, then 9 perturbed starts (occurrence counts with seeded noise, seeds `seed + 1` to `seed + 9`), and keeps the highest log-likelihood. Every start's log-likelihood is recorded in `run.json`, and the screen output says whether the starts disagreed. `--starts 1` reproduces a single run (and the `haplomat` command always uses one start).
 
 ### Blank alleles
 
