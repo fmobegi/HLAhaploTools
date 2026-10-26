@@ -1,6 +1,7 @@
 """Build the lookup tables used to resolve typings to g, G, P or n-field codes.
 
-Input: one IMGT/HLA release directory (hla_nom_g.txt, hla_nom_p.txt).
+Input: one IMGT/HLA release directory (hla_nom_g.txt, hla_nom_p.txt, and
+Allelelist.txt for the loci hla_nom_g.txt does not cover).
 Output, in Hapl-o-Mat's own file formats so both tools can share them:
 
     AllAllelesExpanded.txt  any typing prefix -> full allele names
@@ -12,6 +13,12 @@ The rules, including their odd corners, follow Hapl-o-Mat's prepareData
 scripts, so that results can be compared with the original tool on equal
 terms. `scripts/build_nomenclature.py` calls `derive_all`; the comparison
 test is tests/test_derived_tables.py.
+
+hla_nom_g.txt only covers loci with G groups. With `extra_loci=True` (the
+default), alleles of every other locus in Allelelist.txt (MICA, MICB, H, J, K,
+L, DQA2, TAP1, ...) are added too, so they can be resolved to 1-4 fields and
+to g (their 2-field stem); IMGT/HLA defines no G or P groups for them. Rows
+for the loci Hapl-o-Mat covers are unchanged.
 """
 
 from __future__ import annotations
@@ -33,6 +40,19 @@ def all_alleles(hla_nom_g: Path) -> list[str]:
     for line in _data_lines(hla_nom_g):
         locus, alleles, _group = line.split(";")[:3]
         out.extend(locus + a for a in alleles.split("/"))
+    return out
+
+
+def extra_alleles(allelelist: Path, covered: set[str]) -> list[str]:
+    """Alleles in Allelelist.txt whose locus has no entry in hla_nom_g.txt."""
+    out = []
+    for line in _data_lines(allelelist):
+        parts = line.split(",")
+        if len(parts) < 2 or "*" not in parts[1]:
+            continue
+        name = parts[1].strip()
+        if name.split("*", 1)[0] not in covered:
+            out.append(name)
     return out
 
 
@@ -175,12 +195,19 @@ def _write(path: Path, rows: list[tuple[str, list[str]]]) -> None:
             f.write(key + "\t" + "\t".join(values) + "\n")
 
 
-def derive_all(release_dir: Path, out_dir: Path) -> dict[str, int]:
-    """Write the four tables into out_dir; return the row count of each."""
+def derive_all(release_dir: Path, out_dir: Path, extra_loci: bool = True) -> dict[str, int]:
+    """Write the four tables into out_dir; return the row count of each.
+
+    ``extra_loci=False`` reproduces Hapl-o-Mat's prepareData output exactly.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     nom_g, nom_p = release_dir / "hla_nom_g.txt", release_dir / "hla_nom_p.txt"
 
-    expanded_rows = expanded(all_alleles(nom_g))
+    alleles = all_alleles(nom_g)
+    if extra_loci and (release_dir / "Allelelist.txt").exists():
+        covered = {a.split("*", 1)[0] for a in alleles}
+        alleles += extra_alleles(release_dir / "Allelelist.txt", covered)
+    expanded_rows = expanded(alleles)
     p_rows = groups(nom_p, "P")
     g_rows = groups(nom_g, "G")
     g_small = add_alleles_missing_from_g(small_g(p_rows, g_rows), expanded_rows)

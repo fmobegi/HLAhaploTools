@@ -194,7 +194,7 @@ Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g.
 | `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
 | `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
 
-A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Loci outside the IMGT/HLA tables (e.g. MICA, MICB) can be used with `asItIs`.
+A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Every locus in the IPD-IMGT/HLA allele list can be resolved, including MICA, MICB and the non-classical and pseudogene loci (E, F, G, H, J, K, L, DQA2, TAP1, ...), so haplotypes can extend beyond the classical loci. IMGT/HLA defines G and P groups only for the classical and E/F/G-type loci; for the others, use `1f` to `4f` or `g` (the 2-field name). Loci not in the list at all can still be used with `asItIs`.
 
 ## Command line
 
@@ -395,7 +395,8 @@ Of the 1,273 alleles recovered for rebuilt parents, 1,266 are part of that paren
 
 - Phasing does not model recombination; a recombinant child shows up as inconsistent loci (or a `recombination` flag) and those loci stay unphased. Only the first 8 children of a family are used to phase it.
 - A blank second allele is read as homozygous. If a laboratory leaves alleles blank because they were not typed, use `--half-typed unknown`. The DRB3/4/5 rules follow the usual DRB1 groups and do not cover rare haplotypes with other gene content.
-- Loci outside the IMGT/HLA tables (H, J, MICA, MICB, ...) must be used with `asItIs`, and their alleles must then be written consistently.
+- G and P resolutions are not available for MICA, MICB, H, J and the other loci without IMGT/HLA G and P groups.
+- Each extra locus multiplies the number of phases per person; loci left untyped in many people add many filled-in candidate haplotypes. Expect long runs and high memory use for 8 or more loci with incomplete typing.
 - Excel files are not read; save them as CSV. GL-string ID (GLID) files are not read.
 - On highly ambiguous data, the EM likelihood can have several nearly equal maxima; results then depend slightly on the start values.
 - With small cohorts, haplotype frequencies and the EM-versus-family comparison are not informative.

@@ -166,3 +166,12 @@ def test_matches_original_haplomat(fmt, data, loci):
     )
     assert run.returncode == 0, run.stdout + run.stderr
     assert "largest difference" in run.stdout
+
+
+@needs_derived
+def test_extended_loci_resolve(nom):
+    """MICA, MICB, H and J come from Allelelist.txt and resolve like other loci."""
+    assert nom.translate("MICA*008:01:01", "2f") == [("MICA*008:01", 1.0)]
+    assert [c for c, _ in nom.translate("MICB*005:02", "1f")] == ["MICB*005"]
+    for name in ("MICA*008:01", "H*01:01", "J*01:01"):
+        assert nom.translate(name, "g"), name

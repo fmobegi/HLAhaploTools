@@ -448,6 +448,77 @@ def cmd_run(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ extended loci
+
+# Classical loci first, then MIC and the other loci added in order.
+EXT_LOCI = ["A", "C", "B", "DRB1", "DQB1", "DPB1", "MICA", "MICB", "DQA1", "DPA1", "E", "F", "G", "H", "J"]
+
+
+def cmd_extended(args) -> int:
+    """Haplotypes over more loci (MICA, MICB, E, F, G, H, J): accuracy, fit, cost.
+
+    1. Fully typed populations at an increasing number of loci; every tool.
+    2. MICA and MICB untyped in some people (as when MIC typing is added to a
+       cohort later): hlahaplotools on everyone against every tool on the fully
+       typed people only, all scored against the true frequencies.
+    """
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    cases = []
+    sizes = [int(k) for k in args.loci_counts.split(",")]
+    for k in sizes:
+        loci = EXT_LOCI[:k]
+        rows, truth = simulate(out / "sim_ext" / f"n{args.n}_l{k}", loci, args.n, seed=args.seed)
+        cases.append(run_case(f"ext_n{args.n}_{k}loci", rows, loci, args, truth=truth))
+
+    # Incomplete MIC typing.
+    k = max(s for s in sizes if s >= 8) if any(s >= 8 for s in sizes) else 8
+    loci = EXT_LOCI[:k]
+    sim = out / "sim_ext" / f"n{args.n}_l{k}_mic_missing"
+    sim.mkdir(parents=True, exist_ok=True)
+    rate = args.mic_missing
+    subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "simulate.py"), str(sim), "--samples", str(args.n),
+         "--loci", ",".join(loci), "--haplotypes", "300", "--alleles", "25", "--seed", str(args.seed),
+         "--missing", f"MICA:{rate},MICB:{rate}"],
+        check=True, capture_output=True,
+    )  # fmt: skip
+    truth = {}
+    for line in (sim / "truth.tsv").read_text().splitlines():
+        h, f = line.split("\t")
+        truth[canon(h)] = truth.get(canon(h), 0.0) + float(f)
+    _, all_rows = read_mac(sim / "population.dat")
+    complete = [(sid, per) for sid, per in all_rows if all(a and b for a, b in per)]
+    print(
+        f"\n== MICA/MICB untyped in {rate:.0%}: {len(all_rows)} people, {len(complete)} fully typed, "
+        f"loci {'~'.join(loci)}"
+    )
+    # Every tool on the fully typed people (what Hapl-o-Mat and PyPop can use).
+    case = run_case(f"ext_mic_missing_complete_only_n{len(complete)}_{k}loci", complete, loci, args, truth=truth)
+    # hlahaplotools on everyone, MIC left untyped where it was not typed.
+    work = Path(args.out).resolve() / "cases" / f"ext_mic_missing_all_n{len(all_rows)}_{k}loci"
+    work.mkdir(parents=True, exist_ok=True)
+    data = sim / "population.dat"
+    r = run_ours(work, data.resolve(), loci, args.epsilon, max(args.threads), args.timeout, starts=args.starts)
+    freqs = r.pop("freqs", None)
+    r.pop("stdout", None)
+    if freqs is not None:
+        r["vs_truth"] = compare(freqs, truth)
+        r["haplotypes"] = len(freqs)
+    case["everyone"] = {"n": len(all_rows), "tool": f"hlahaplotools, {args.starts} starts, everyone", **r}
+    print(
+        f"  everyone ({len(all_rows)} people), hlahaplotools: {r.get('status')}  "
+        f"TVD to truth {r.get('vs_truth', {}).get('tvd', float('nan')):.4f}  {r.get('seconds', 0):.1f}s  "
+        f"{r.get('peak_mb', 0):.0f} MB"
+    )
+    cases.append(case)
+    (out / "extended.json").write_text(
+        json.dumps({"environment": environment(), "settings": vars(args), "cases": cases}, indent=2, default=str) + "\n"
+    )
+    print(f"\nWrote {out / 'extended.json'}")
+    return 0
+
+
 # ------------------------------------------------------------------ multi-start and bootstrap
 
 
@@ -645,6 +716,22 @@ def main() -> int:
     r.add_argument("--pypop-all", action="store_true", help="also try PyPop above 5000 people")
     r.set_defaults(func=cmd_run)
 
+    x = sub.add_parser("extended", help="more loci (MICA, MICB, E, F, G, H, J) and incomplete MIC typing")
+    x.add_argument("--out", default="bench/results")
+    x.add_argument("--seed", type=int, default=1)
+    x.add_argument("--n", type=int, default=2000, help="simulated people")
+    x.add_argument("--loci-counts", default="6,9,12,15", help="numbers of loci (first k of the extended list)")
+    x.add_argument("--mic-missing", type=float, default=0.3, help="share of people with MICA and MICB untyped")
+    x.add_argument("--threads", default="8")
+    x.add_argument("--starts", type=int, default=10)
+    x.add_argument("--ref-starts", type=int, default=20)
+    x.add_argument("--epsilon", type=float, default=1e-6)
+    x.add_argument("--timeout", type=float, default=3600)
+    x.add_argument("--haplomat", default=str(HAPLOMAT))
+    x.add_argument("--pypop", default=str(PYPOP))
+    x.add_argument("--pypop-all", action="store_true")
+    x.set_defaults(func=cmd_extended)
+
     def sets(p):
         p.add_argument("--sets", default="A,B,C;A,B,C,DRB1;A,B,C,DRB1,DQB1,DPB1", help="locus sets, ';'-separated")
 
@@ -671,7 +758,7 @@ def main() -> int:
         args.threads = [int(t) for t in args.threads.split(",")]
     if getattr(args, "sets", None) is not None and isinstance(args.sets, str):
         args.sets = [s.split(",") for s in args.sets.split(";")]
-    if args.cmd != "report" and args.cmd != "run" and not args.real:
+    if args.cmd in ("multistart", "bootstrap") and not args.real:
         sys.exit("error: --real is needed for multistart and bootstrap")
     return args.func(args)
 
