@@ -15,7 +15,7 @@
 *.vscode*
 *.lintr
 inst/doc
-inst/extdata
+#inst/extdata
 /doc/
 /Meta/
 .Rproj.user
