@@ -29,8 +29,11 @@ def two_field_alleles(nomenclature: Path, locus: str) -> list[str]:
     out = []
     with (nomenclature / "AllAllelesExpanded.txt").open() as f:
         for line in f:
-            key = line.split("\t", 1)[0]
-            if key.startswith(locus + "*") and key.count(":") == 1 and key[-1].isdigit():
+            key, *alleles = line.rstrip("\n").split("\t")
+            if not (key.startswith(locus + "*") and key.count(":") == 1 and key[-1].isdigit()):
+                continue
+            # Skip names covering only null or unusually expressed alleles (N, L, S, Q).
+            if any(a[-1].isdigit() for a in alleles):
                 out.append(key)
     return out
 
