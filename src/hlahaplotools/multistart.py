@@ -11,7 +11,8 @@ starts came much closer to the best fit than fully random ones.
 :func:`estimate_multistart` runs the requested start first, then perturbed
 starts (``numberOccurrence`` with seeded noise) with seeds ``seed + 1,
 seed + 2, ...``, and returns the estimate with the highest log-likelihood, so
-results stay reproducible.
+results stay reproducible. The starts run inside the Rust core on one model,
+which is built once.
 """
 
 from __future__ import annotations
@@ -19,27 +20,16 @@ from __future__ import annotations
 from hlahaplotools._core import estimate
 
 
-def estimate_multistart(
-    dataset, nomenclature, resolutions=None, *, starts: int = 10, extra_init: str = "perturbation", **options
-):
+def estimate_multistart(dataset, nomenclature, resolutions=None, *, starts: int = 10, **options):
     """Run :func:`hlahaplotools.estimate` from ``starts`` start values; keep the best.
 
     The first start uses ``options["init"]`` (default ``numberOccurrence``) and
-    ``options["seed"]`` (default 0); the others use ``extra_init`` (default
-    ``perturbation``) with seeds ``seed + 1`` to ``seed + starts - 1``. Returns
-    ``(best, summary)`` where ``summary`` lists ``(init, seed, log_likelihood,
-    iterations, converged)`` for every start, in the order run.
+    ``options["seed"]`` (default 0); the others are perturbed starts with seeds
+    ``seed + 1`` to ``seed + starts - 1``. Returns ``(best, summary)`` where
+    ``summary`` lists ``(init, seed, log_likelihood, iterations, converged)`` for
+    every start, in the order run (also available as ``best.starts``).
     """
     if starts < 1:
         raise ValueError("starts must be at least 1")
-    seed = options.pop("seed", 0)
-    init = options.pop("init", "numberOccurrence")
-    best, summary = None, []
-    for k in range(starts):
-        this_init, this_seed = (init, seed) if k == 0 else (extra_init, seed + k)
-        est = estimate(dataset, nomenclature, resolutions, init=this_init, seed=this_seed, **options)
-        summary.append((this_init, this_seed, est.log_likelihood, est.iterations, est.converged))
-        # Ties keep the earlier start, so the result does not depend on float noise.
-        if best is None or est.log_likelihood > best.log_likelihood + 1e-9 * abs(best.log_likelihood):
-            best = est
-    return best, summary
+    est = estimate(dataset, nomenclature, resolutions, starts=starts, **options)
+    return est, list(est.starts)

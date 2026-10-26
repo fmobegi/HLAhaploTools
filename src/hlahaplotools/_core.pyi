@@ -41,6 +41,8 @@ class Estimate:
     @property
     def iterations(self) -> int: ...
     @property
+    def starts(self) -> list[tuple[str, int, float, int, bool]]: ...  # (init, seed, logL, iterations, converged)
+    @property
     def converged(self) -> bool: ...
     @property
     def log_likelihood(self) -> float: ...
@@ -94,6 +96,9 @@ def estimate(
     min_genotype_frequency: float = 1e-5,
     max_completions: int = 10_000,
     threads: int | None = None,
+    starts: int = 1,  # EM starts on one model: --init, then perturbed starts (seed + 1, ...)
+    completion: str = "linked",  # or "all": how untyped loci are filled in
+    diplotypes: bool = True,  # compute best_diplotypes() (costly with many untyped loci)
 ) -> Estimate: ...
 
 Resolutions = str | list[str] | dict[str, str] | None
@@ -161,6 +166,8 @@ def estimate_families(
     min_genotype_frequency: float = 1e-5,
     max_completions: int = 10_000,
     threads: int | None = None,
+    starts: int = 1,
+    completion: str = "linked",
 ) -> tuple[Estimate, list[FamilyPhase]]: ...
 def compare_to_families(estimate: Estimate, phases: list[FamilyPhase]) -> dict[str, Any]: ...
 def audit_families(

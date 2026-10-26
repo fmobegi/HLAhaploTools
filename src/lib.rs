@@ -354,6 +354,30 @@ mod _core {
             self.inner.iterations
         }
 
+        /// Every EM start, in the order run: (init, seed, log-likelihood, iterations, converged).
+        #[getter]
+        fn starts(&self) -> Vec<(String, u64, f64, usize, bool)> {
+            self.inner
+                .starts
+                .iter()
+                .map(|s| {
+                    let init = match s.init {
+                        hh::Init::NumberOccurrence => "numberOccurrence",
+                        hh::Init::Perturbation => "perturbation",
+                        hh::Init::Equal => "equal",
+                        hh::Init::Random => "random",
+                    };
+                    (
+                        init.to_string(),
+                        s.seed,
+                        s.log_likelihood,
+                        s.iterations,
+                        s.converged,
+                    )
+                })
+                .collect()
+        }
+
         #[getter]
         fn converged(&self) -> bool {
             self.inner.converged
@@ -510,7 +534,13 @@ mod _core {
         seed: u64,
         min_genotype_frequency: f64,
         max_completions: usize,
+        completion: &str,
+        starts: usize,
+        diplotypes: bool,
     ) -> PyResult<hh::EmOptions> {
+        if starts == 0 {
+            return Err(PyValueError::new_err("starts must be at least 1"));
+        }
         Ok(hh::EmOptions {
             epsilon,
             max_iterations,
@@ -518,6 +548,9 @@ mod _core {
             seed,
             min_genotype_frequency,
             max_completions,
+            completion: completion.parse().map_err(PyValueError::new_err)?,
+            starts,
+            diplotypes,
         })
     }
 
@@ -528,7 +561,8 @@ mod _core {
     #[pyfunction]
     #[pyo3(signature = (
         dataset, nomenclature, resolutions=None, *, epsilon=1e-6, max_iterations=100_000,
-        init="numberOccurrence", seed=0, min_genotype_frequency=1e-5, max_completions=10_000, threads=None
+        init="numberOccurrence", seed=0, min_genotype_frequency=1e-5, max_completions=10_000, threads=None,
+        starts=1, completion="linked", diplotypes=true
     ))]
     #[allow(clippy::too_many_arguments)]
     fn estimate(
@@ -543,6 +577,9 @@ mod _core {
         min_genotype_frequency: f64,
         max_completions: usize,
         threads: Option<usize>,
+        starts: usize,
+        completion: &str,
+        diplotypes: bool,
     ) -> PyResult<Estimate> {
         let res = resolutions_or_g(&dataset.inner.loci, resolutions)?;
         let opts = em_options(
@@ -552,6 +589,9 @@ mod _core {
             seed,
             min_genotype_frequency,
             max_completions,
+            completion,
+            starts,
+            diplotypes,
         )?;
         let (ds, nom) = (&dataset.inner, &nomenclature.inner);
         let inner = run_detached(py, threads, || hh::estimate(ds, nom, &res, &opts))?;
@@ -848,7 +888,8 @@ mod _core {
     #[pyfunction]
     #[pyo3(signature = (
         data, nomenclature, resolutions=None, *, use_family_phase=true, epsilon=1e-6, max_iterations=100_000,
-        init="numberOccurrence", seed=0, min_genotype_frequency=1e-5, max_completions=10_000, threads=None
+        init="numberOccurrence", seed=0, min_genotype_frequency=1e-5, max_completions=10_000, threads=None,
+        starts=1, completion="linked"
     ))]
     #[allow(clippy::too_many_arguments)]
     fn estimate_families(
@@ -864,6 +905,8 @@ mod _core {
         min_genotype_frequency: f64,
         max_completions: usize,
         threads: Option<usize>,
+        starts: usize,
+        completion: &str,
     ) -> PyResult<(Estimate, Vec<FamilyPhase>)> {
         let res = resolutions_or_g(&data.ds.loci, resolutions)?;
         let opts = em_options(
@@ -873,6 +916,9 @@ mod _core {
             seed,
             min_genotype_frequency,
             max_completions,
+            completion,
+            starts,
+            true,
         )?;
         let (ds, ped, nom) = (&data.ds, &data.ped, &nomenclature.inner);
         let (est, phases) = run_detached(py, threads, || {

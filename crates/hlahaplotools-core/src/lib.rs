@@ -27,7 +27,7 @@ pub mod typing;
 pub use audit::{AuditOptions, FlagKind, PedigreeFlag, audit_families};
 pub use dataset::{Dataset, Issue, LocusObs, Sample};
 pub use error::Error;
-pub use estimate::{Diplotype, EmOptions, Estimate, Init, estimate};
+pub use estimate::{Completion, Diplotype, EmOptions, Estimate, Init, StartRecord, estimate};
 pub use family::{
     ChildInheritance, Family, FamilyComparison, FamilyPhase, FounderComparison, MendelIssue,
     Pedigree, PhaseStatus, Role, check_mendelian, compare_to_families, estimate_families,

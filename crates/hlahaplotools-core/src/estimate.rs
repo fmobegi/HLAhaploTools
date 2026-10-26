@@ -86,6 +86,40 @@ pub struct EmOptions {
     pub min_genotype_frequency: f64,
     /// Most haplotypes to create when filling in one open pattern.
     pub max_completions: usize,
+    /// How open patterns that match no haplotype are filled in.
+    pub completion: Completion,
+    /// EM runs from different start values on the same model; the best fit is kept.
+    /// The first uses `init` and `seed`; the others are perturbed starts with seeds
+    /// `seed + 1`, `seed + 2`, ...
+    pub starts: usize,
+    /// Compute each sample's most likely haplotype pair (costly with many open patterns).
+    pub diplotypes: bool,
+}
+
+/// How an open pattern (a haplotype with untyped loci) that matches no haplotype
+/// in the data is filled in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Completion {
+    /// Each open locus takes the alleles seen at it together with the pattern's
+    /// allele at its most strongly linked typed locus, in the haplotypes fully
+    /// specified by the data (e.g. DQA1 given DQB1). The linked locus is the one
+    /// that leaves the least uncertainty (conditional entropy) about the open
+    /// locus. Falls back to every allele seen when nothing links.
+    Linked,
+    /// Every combination of the alleles seen at the open loci (exhaustive; can
+    /// create very many haplotypes when several loci are open).
+    All,
+}
+
+impl std::str::FromStr for Completion {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "linked" => Ok(Completion::Linked),
+            "all" => Ok(Completion::All),
+            other => Err(format!("unknown completion {other:?} (use linked or all)")),
+        }
+    }
 }
 
 impl Default for EmOptions {
@@ -97,8 +131,21 @@ impl Default for EmOptions {
             seed: 0,
             min_genotype_frequency: 1e-5,
             max_completions: 10_000,
+            completion: Completion::Linked,
+            starts: 1,
+            diplotypes: true,
         }
     }
+}
+
+/// One EM start of [`estimate`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct StartRecord {
+    pub init: Init,
+    pub seed: u64,
+    pub log_likelihood: f64,
+    pub iterations: usize,
+    pub converged: bool,
 }
 
 /// Result of [`estimate`].
@@ -127,8 +174,11 @@ pub struct Estimate {
     pub issues: Vec<Issue>,
     /// Wall-clock seconds per stage: ("resolve", s), ("model", s), ("em", s).
     pub timings: Vec<(&'static str, f64)>,
-    /// Most likely haplotype pair for each sample used (see [`Estimate::best_diplotypes`]).
+    /// Most likely haplotype pair for each sample used (see [`Estimate::best_diplotypes`]);
+    /// empty when [`EmOptions::diplotypes`] is off.
     pub diplotypes: Vec<Diplotype>,
+    /// Every EM start, in the order run; the estimate is the best of them.
+    pub starts: Vec<StartRecord>,
 }
 
 /// The most likely pair of haplotypes for one sample, given the estimated frequencies.
@@ -416,10 +466,214 @@ fn for_each_combination<T>(options: &[Vec<T>], mut visit: impl FnMut(&[usize])) 
     }
 }
 
+/// Loci along the MHC, telomeric class I to centromeric class II (approximate order).
+const MHC_ORDER: &[&str] = &[
+    "F", "G", "H", "A", "J", "E", "C", "B", "MICA", "MICB", "DRB5", "DRB4", "DRB3", "DRB1", "DQA1",
+    "DQB1", "DQA2", "DQB2", "DOB", "TAP2", "TAP1", "DMB", "DMA", "DOA", "DPA1", "DPB1",
+];
+
+/// Strongly linked partners, best first: the pairs whose alleles travel together.
+fn known_partners(locus: &str) -> &'static [&'static str] {
+    match locus {
+        "DQA1" => &["DQB1", "DRB1"],
+        "DQB1" => &["DQA1", "DRB1"],
+        "DRB1" => &["DQB1", "DQA1", "DRB3", "DRB4", "DRB5"],
+        "DRB3" | "DRB4" | "DRB5" => &["DRB1", "DQB1"],
+        "DPA1" => &["DPB1"],
+        "DPB1" => &["DPA1"],
+        "B" => &["C", "MICA", "MICB"],
+        "C" => &["B", "A"],
+        "A" => &["C", "B"],
+        "MICA" => &["B", "MICB", "C"],
+        "MICB" => &["MICA", "B", "C"],
+        _ => &[],
+    }
+}
+
+/// Smallest conditional probability P(open allele | linked allele), from the
+/// two-locus estimate, for an allele to be tried when filling in.
+const LINK_MIN: f64 = 1e-3;
+/// Linked loci consulted per open locus (the first one that is typed is used).
+const LINK_PARTNERS: usize = 3;
+
+/// For linked completion: which alleles at an open locus go with each allele of
+/// its linked loci, and which locus to consult for each open locus.
+struct Linkage {
+    n_loci: usize,
+    /// with[l * n + m]: allele at m -> alleles at l with P(l | m) >= LINK_MIN in the
+    /// two-locus EM estimate for (l, m). Only computed for the loci consulted.
+    with: Vec<FxHashMap<u32, Vec<u32>>>,
+    /// partners[l]: the other loci in the order they are consulted.
+    partners: Vec<Vec<usize>>,
+}
+
+/// Two-locus EM estimate for loci (l, m) from every phenotype, as
+/// allele at m -> alleles at l with conditional probability >= LINK_MIN.
+fn pair_links(
+    phenotypes: &[(Vec<LocusGeno>, f64)],
+    l: usize,
+    m: usize,
+    loci: &[String],
+    max_completions: usize,
+) -> FxHashMap<u32, Vec<u32>> {
+    let mut pooled: FxHashMap<Vec<LocusGeno>, f64> = FxHashMap::default();
+    for (genotypes, w) in phenotypes {
+        let (gl, gm) = (genotypes[l], genotypes[m]);
+        if gl.a == WILD && gl.b == WILD || gm.a == WILD && gm.b == WILD {
+            continue; // says nothing about how l and m go together
+        }
+        *pooled.entry(vec![gl, gm]).or_insert(0.0) += w;
+    }
+    let mut out: FxHashMap<u32, Vec<u32>> = FxHashMap::default();
+    if pooled.is_empty() {
+        return out;
+    }
+    let mut pair: Vec<(Vec<LocusGeno>, f64)> = pooled.into_iter().collect();
+    pair.sort_by(|a, b| a.0.cmp(&b.0)); // deterministic order
+    let n: f64 = pair.iter().map(|p| p.1).sum();
+    let names = [loci[l].clone(), loci[m].clone()];
+    let model = build_model(&pair, 2, max_completions, Completion::All, &names);
+    let opts = EmOptions {
+        epsilon: 1e-6_f64.min(0.25 / n),
+        ..Default::default()
+    };
+    let (f, ..) = model.run(&opts, n);
+    let mut by_m: FxHashMap<u32, Vec<(u32, f64)>> = FxHashMap::default();
+    for (h, &v) in f.iter().enumerate() {
+        if v > 0.0 {
+            let key = model.key(model.hap_pattern[h]);
+            by_m.entry(key[1]).or_default().push((key[0], v));
+        }
+    }
+    for (b, list) in by_m {
+        let total: f64 = list.iter().map(|x| x.1).sum();
+        let mut keep: Vec<u32> = list
+            .into_iter()
+            .filter(|&(_, v)| v / total >= LINK_MIN)
+            .map(|(a, _)| a)
+            .collect();
+        keep.sort_unstable();
+        out.insert(b, keep);
+    }
+    out
+}
+
+impl Linkage {
+    /// Partners: the known strongly linked loci first (DQA1-DQB1, DPA1-DPB1,
+    /// DRB3/4/5-DRB1, B-C, MIC-B), then the others by distance along the MHC.
+    /// Loci not on the MHC map are ordered by conditional entropy H(l | m),
+    /// computed from the fully specified haplotypes. Which alleles go together is
+    /// then estimated by a two-locus EM for each open locus and its first partners.
+    fn new(
+        keys: &[&[u32]],
+        loci: &[String],
+        phenotypes: &[(Vec<LocusGeno>, f64)],
+        open_loci: &[bool],
+        max_completions: usize,
+    ) -> Self {
+        let n_loci = loci.len();
+        let mut with: Vec<FxHashMap<u32, Vec<u32>>> = vec![FxHashMap::default(); n_loci * n_loci];
+        let mut pair_counts: Vec<FxHashMap<(u32, u32), f64>> =
+            vec![FxHashMap::default(); n_loci * n_loci];
+        for key in keys {
+            for l in 0..n_loci {
+                for m in 0..n_loci {
+                    if l != m {
+                        *pair_counts[l * n_loci + m]
+                            .entry((key[l], key[m]))
+                            .or_insert(0.0) += 1.0;
+                    }
+                }
+            }
+        }
+        // H(l | m) = H(l, m) - H(m), from haplotype counts.
+        let entropy = |counts: &mut dyn Iterator<Item = f64>| -> f64 {
+            let v: Vec<f64> = counts.collect();
+            let total: f64 = v.iter().sum();
+            if total <= 0.0 {
+                return 0.0;
+            }
+            -v.iter()
+                .filter(|&&c| c > 0.0)
+                .map(|&c| c / total * (c / total).ln())
+                .sum::<f64>()
+        };
+        let mut partners = vec![Vec::new(); n_loci];
+        for (l, list) in partners.iter_mut().enumerate() {
+            let mut scored: Vec<(f64, usize)> = (0..n_loci)
+                .filter(|&m| m != l)
+                .map(|m| {
+                    let joint = &pair_counts[l * n_loci + m];
+                    let mut marginal: FxHashMap<u32, f64> = FxHashMap::default();
+                    for (&(_, b), &c) in joint {
+                        *marginal.entry(b).or_insert(0.0) += c;
+                    }
+                    let h = entropy(&mut joint.values().copied())
+                        - entropy(&mut marginal.values().copied());
+                    (h, m)
+                })
+                .collect();
+            // Ties broken by locus order, so the choice is deterministic.
+            scored.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)));
+            let by_entropy: Vec<usize> = scored.into_iter().map(|(_, m)| m).collect();
+            let name = loci[l].to_ascii_uppercase();
+            let pos = |m: usize| {
+                MHC_ORDER
+                    .iter()
+                    .position(|x| *x == loci[m].to_ascii_uppercase())
+            };
+            let mut order: Vec<usize> = known_partners(&name)
+                .iter()
+                .filter_map(|p| (0..n_loci).find(|&m| m != l && loci[m].eq_ignore_ascii_case(p)))
+                .collect();
+            if let Some(here) = MHC_ORDER.iter().position(|x| *x == name) {
+                let mut near: Vec<(usize, usize)> = (0..n_loci)
+                    .filter(|&m| m != l && !order.contains(&m))
+                    .filter_map(|m| pos(m).map(|p| (p.abs_diff(here), m)))
+                    .collect();
+                near.sort();
+                order.extend(near.into_iter().map(|(_, m)| m));
+            }
+            let rest: Vec<usize> = by_entropy
+                .into_iter()
+                .filter(|m| !order.contains(m))
+                .collect();
+            order.extend(rest);
+            *list = order;
+        }
+        for l in (0..n_loci).filter(|&l| open_loci[l]) {
+            for &m in partners[l].iter().take(LINK_PARTNERS) {
+                with[l * n_loci + m] = pair_links(phenotypes, l, m, loci, max_completions);
+            }
+        }
+        Linkage {
+            n_loci,
+            with,
+            partners,
+        }
+    }
+
+    /// Alleles to try at open locus `l` of pattern `key`: those seen with the pattern's
+    /// allele at the most informative typed locus; `None` if nothing links.
+    fn allowed(&self, l: usize, key: &[u32]) -> Option<&Vec<u32>> {
+        self.partners[l].iter().find_map(|&m| {
+            let c = key[m];
+            if c == WILD {
+                return None;
+            }
+            self.with[l * self.n_loci + m]
+                .get(&c)
+                .filter(|v| !v.is_empty())
+        })
+    }
+}
+
 fn build_model(
     phenotypes: &[(Vec<LocusGeno>, f64)],
     n_loci: usize,
     max_completions: usize,
+    completion: Completion,
+    loci: &[String],
 ) -> Model {
     let mut store = PatternStore::new(n_loci);
     let mut num = Vec::with_capacity(phenotypes.len());
@@ -481,20 +735,37 @@ fn build_model(
         list.sort_unstable();
         list.dedup();
     }
+    let linkage = (completion == Completion::Linked).then(|| {
+        let keys: Vec<&[u32]> = hap_pattern.iter().map(|&p| store.key(p)).collect();
+        // Loci open in some pattern that will need filling in.
+        let mut open_loci = vec![false; n_loci];
+        for (k, &p) in open.iter().enumerate() {
+            if first_members[k].is_empty() {
+                for (locus, &c) in store.key(p).iter().enumerate() {
+                    open_loci[locus] |= c == WILD;
+                }
+            }
+        }
+        Linkage::new(&keys, loci, phenotypes, &open_loci, max_completions)
+    });
     let mut n_completions = 0;
     for (k, &p) in open.iter().enumerate() {
         if !first_members[k].is_empty() {
             continue;
         }
-        let choices: Vec<Vec<u32>> = store
-            .key(p)
+        let key = store.key(p).to_vec();
+        let choices: Vec<Vec<u32>> = key
             .iter()
             .enumerate()
             .map(|(locus, &c)| {
-                if c == WILD {
-                    alleles_at[locus].clone()
-                } else {
+                if c != WILD {
                     vec![c]
+                } else if let Some(allowed) =
+                    linkage.as_ref().and_then(|lk| lk.allowed(locus, &key))
+                {
+                    allowed.clone()
+                } else {
+                    alleles_at[locus].clone()
                 }
             })
             .collect();
@@ -605,6 +876,9 @@ fn member_lists(store: &PatternStore, open: &[u32], hap_pattern: &[u32]) -> Vec<
 }
 
 // ------------------------------------------------------------ EM
+
+/// Result of one EM run: (frequencies, iterations, converged, history, final log-likelihood).
+type EmRun = (Vec<f64>, usize, bool, Vec<(f64, f64)>, f64);
 
 /// Small deterministic RNG (SplitMix64) for the seeded initialisations.
 struct SplitMix64(u64);
@@ -807,11 +1081,7 @@ impl Model {
     }
 
     /// Run EM to convergence. Returns (frequencies, iterations, converged, history, final logL).
-    fn run(
-        &self,
-        opts: &EmOptions,
-        n_samples: f64,
-    ) -> (Vec<f64>, usize, bool, Vec<(f64, f64)>, f64) {
+    fn run(&self, opts: &EmOptions, n_samples: f64) -> EmRun {
         let mut f = self.initialise(opts.init, opts.seed, n_samples);
         let mut history = Vec::new();
         let mut converged = false;
@@ -1005,9 +1275,41 @@ pub(crate) fn estimate_resolved(
     }
 
     timings.push(("resolve", clock.elapsed().as_secs_f64()));
-    let model = build_model(&phenotypes, n_loci, opts.max_completions);
+    let model = build_model(
+        &phenotypes,
+        n_loci,
+        opts.max_completions,
+        opts.completion,
+        loci,
+    );
     timings.push(("model", clock.elapsed().as_secs_f64() - timings[0].1));
-    let (f, iterations, converged, history, log_likelihood) = model.run(opts, n_samples as f64);
+    // Several starts on one model; only the best frequencies are kept.
+    let mut starts = Vec::with_capacity(opts.starts.max(1));
+    let mut best: Option<EmRun> = None;
+    for k in 0..opts.starts.max(1) {
+        let mut o = opts.clone();
+        if k > 0 {
+            o.init = Init::Perturbation;
+            o.seed = opts.seed + k as u64;
+        }
+        let run = model.run(&o, n_samples as f64);
+        starts.push(StartRecord {
+            init: o.init,
+            seed: o.seed,
+            log_likelihood: run.4,
+            iterations: run.1,
+            converged: run.2,
+        });
+        // Near-ties keep the earlier start, so float noise does not decide.
+        let better = match &best {
+            None => true,
+            Some(b) => run.4 > b.4 + 1e-9 * b.4.abs(),
+        };
+        if better {
+            best = Some(run);
+        }
+    }
+    let (f, iterations, converged, history, log_likelihood) = best.expect("at least one start");
     timings.push((
         "em",
         clock.elapsed().as_secs_f64() - timings[0].1 - timings[1].1,
@@ -1029,22 +1331,26 @@ pub(crate) fn estimate_resolved(
         .collect();
     haplotypes.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
 
-    let diplotypes = best_diplotypes(&model, &f, &phenotypes, &used)
-        .into_iter()
-        .zip(&used)
-        .map(|(best, (id, _))| match best {
-            Some((h1, h2, p)) => Diplotype {
-                sample_id: id.clone(),
-                haplotypes: [hap_name(h1), hap_name(h2)],
-                probability: p,
-            },
-            None => Diplotype {
-                sample_id: id.clone(),
-                haplotypes: [String::new(), String::new()],
-                probability: 0.0,
-            },
-        })
-        .collect();
+    let diplotypes = if !opts.diplotypes {
+        Vec::new()
+    } else {
+        best_diplotypes(&model, &f, &phenotypes, &used)
+            .into_iter()
+            .zip(&used)
+            .map(|(best, (id, _))| match best {
+                Some((h1, h2, p)) => Diplotype {
+                    sample_id: id.clone(),
+                    haplotypes: [hap_name(h1), hap_name(h2)],
+                    probability: p,
+                },
+                None => Diplotype {
+                    sample_id: id.clone(),
+                    haplotypes: [String::new(), String::new()],
+                    probability: 0.0,
+                },
+            })
+            .collect()
+    };
     timings.push((
         "diplotypes",
         clock.elapsed().as_secs_f64() - timings.iter().map(|t| t.1).sum::<f64>(),
@@ -1066,6 +1372,7 @@ pub(crate) fn estimate_resolved(
         issues,
         timings,
         diplotypes,
+        starts,
     })
 }
 

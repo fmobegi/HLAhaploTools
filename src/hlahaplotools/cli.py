@@ -111,6 +111,7 @@ def run_estimate(
     half_typed: str = "homozygous",
     drb345: bool = True,
     starts: int = 1,
+    completion: str = "linked",
 ) -> int:
     say = (lambda *a: None) if quiet else print
     loci = [l for l, _ in loci_res]
@@ -135,6 +136,8 @@ def run_estimate(
         min_genotype_frequency=min_genotype_frequency,
         max_completions=max_completions,
         threads=threads,
+        completion=completion,
+        diplotypes=False,  # the command line does not write them; costly with many open patterns
     )
     t2 = time.perf_counter()
     if starts > 1:
@@ -188,6 +191,7 @@ def run_estimate(
             "min_genotype_frequency": min_genotype_frequency,
             "max_completions": max_completions,
             "starts": starts,
+            "completion": completion,
         },
         "starts": [
             {"init": i, "seed": sd, "log_likelihood": ll, "iterations": it, "converged": cv}
@@ -292,6 +296,7 @@ def cmd_estimate(args) -> int:
         half_typed=args.half_typed,
         drb345=not args.no_drb345,
         starts=args.starts,
+        completion=args.completion,
     )
 
 
@@ -452,6 +457,7 @@ def cmd_families(args) -> int:
         min_genotype_frequency=args.min_genotype_frequency,
         max_completions=args.max_completions,
         threads=args.threads,
+        completion=args.completion,
     )
     est, phases = estimate_families(data, nom, res, use_family_phase=not args.no_family_phase, **em)
     statuses = {s: sum(p.status == s for p in phases) for s in ("complete", "partial", "failed")}
@@ -581,6 +587,13 @@ def build_parser() -> argparse.ArgumentParser:
             type=int,
             default=10_000,
             help="most haplotypes created to fill in one partly typed pattern (default 10000)",
+        )
+        p.add_argument(
+            "--completion",
+            choices=["linked", "all"],
+            default="linked",
+            help="how untyped loci are filled in: alleles seen with the most strongly linked typed locus "
+            "(linked, default) or every combination of the alleles seen (all)",
         )
         p.add_argument("--threads", type=int, help="worker threads (default: all cores; results are identical)")
         p.add_argument("-q", "--quiet", action="store_true")
