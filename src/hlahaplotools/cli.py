@@ -10,7 +10,8 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from hlahaplotools._core import Nomenclature, estimate, read_glsc, read_mac
+from hlahaplotools._core import Nomenclature, read_glsc, read_mac
+from hlahaplotools.multistart import estimate_multistart
 
 INITS = ["numberOccurrence", "perturbation", "equal", "random"]
 
@@ -109,6 +110,7 @@ def run_estimate(
     quiet: bool = False,
     half_typed: str = "homozygous",
     drb345: bool = True,
+    starts: int = 1,
 ) -> int:
     say = (lambda *a: None) if quiet else print
     loci = [l for l, _ in loci_res]
@@ -122,10 +124,11 @@ def run_estimate(
     for locus, res in loci_res:
         say(f"  {locus:6} -> {res:6} untyped: {missing[locus]:6}  one allele typed: {half[locus]:6}")
 
-    est = estimate(
+    est, start_summary = estimate_multistart(
         ds,
         nom,
         [r for _, r in loci_res],
+        starts=starts,
         epsilon=epsilon,
         init=init,
         seed=seed,
@@ -134,6 +137,14 @@ def run_estimate(
         threads=threads,
     )
     t2 = time.perf_counter()
+    if starts > 1:
+        lls = [s[2] for s in start_summary]
+        best = max(range(len(lls)), key=lambda k: lls[k])
+        ahead = sum(l < max(lls) - 1e-6 * abs(max(lls)) for l in lls)
+        say(
+            f"Starts: {starts}; best logL {max(lls):.6f} from start {best + 1} ({start_summary[best][0]}, "
+            f"seed {start_summary[best][1]}); worst {min(lls):.6f}; {ahead} of {starts} starts ended lower"
+        )
     say(
         f"EM: {est.n_samples} samples ({est.n_samples_incomplete} incomplete), {est.n_phenotypes} genotypes, "
         f"{est.n_candidates} candidate haplotypes ({est.n_completions} filled in), "
@@ -171,7 +182,12 @@ def run_estimate(
             "renormalize": renormalize,
             "min_genotype_frequency": min_genotype_frequency,
             "max_completions": max_completions,
+            "starts": starts,
         },
+        "starts": [
+            {"init": i, "seed": sd, "log_likelihood": ll, "iterations": it, "converged": cv}
+            for i, sd, ll, it, cv in start_summary
+        ],
         "filling": {"half_typed": half_typed, "drb345_from_drb1": drb345, "filled": ds.fill_counts()},
         "samples_read": len(ds),
         "samples_used": est.n_samples,
@@ -270,6 +286,7 @@ def cmd_estimate(args) -> int:
         quiet=args.quiet,
         half_typed=args.half_typed,
         drb345=not args.no_drb345,
+        starts=args.starts,
     )
 
 
@@ -582,6 +599,12 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--format", choices=["mac", "glsc"], help="default: guess from the file extension")
     e.add_argument("-o", "--output", default="results", help="output folder (default: results)")
     em_options(e)
+    e.add_argument(
+        "--starts",
+        type=int,
+        default=1,
+        help="EM start values: --init first, then perturbed starts (seed+1, ...); the best fit is kept (default 1)",
+    )
     data_options(e)
     run_options(e)
     e.set_defaults(func=cmd_estimate)
