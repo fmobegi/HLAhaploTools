@@ -2,7 +2,8 @@
 
 > This repository previously held the HLAhaploTools **R package**; it now
 > holds its successor, written in Rust with a Python API. The last R version
-> is commit `36bc2d3` in this repository's history.
+> is tagged [`r-package-v0.99.0`](https://github.com/fmobegi/HLAhaploTools/tree/r-package-v0.99.0)
+> (commit `36bc2d3`).
 
 The Python package and command are called `hlahaplotools`.
 
