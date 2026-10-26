@@ -57,10 +57,31 @@ def resolve_data_paths(args) -> tuple[Path, Path | None, dict]:
 # ---------------------------------------------------------------- running
 
 
-def read_input(path: str, fmt: str | None, mac: Path | None, loci: list[str] | None):
+def read_input(
+    path: str,
+    fmt: str | None,
+    mac: Path | None,
+    loci: list[str] | None,
+    half_typed: str = "homozygous",
+    drb345: bool = True,
+):
     fmt = fmt or ("glsc" if path.lower().endswith((".glc", ".glsc")) else "mac")
     reader = read_glsc if fmt == "glsc" else read_mac
-    return reader(path, mac_codes=str(mac) if mac and mac.exists() else None, loci=loci), fmt
+    mac_codes = str(mac) if mac and mac.exists() else None
+    return reader(path, mac_codes=mac_codes, loci=loci, half_typed=half_typed, drb345=drb345), fmt
+
+
+def describe_fills(fills: dict, say) -> None:
+    """Print what reading filled in, per locus."""
+    for locus, f in fills.items():
+        parts = []
+        if f["homozygous"]:
+            parts.append(f"{f['homozygous']} single alleles copied (homozygous)")
+        if f["absent_gene"]:
+            parts.append(f"{f['absent_gene']} gene copies set absent from DRB1")
+        if f["drb_completed"]:
+            parts.append(f"{f['drb_completed']} genotypes completed from DRB1")
+        say(f"  filled at {locus}: " + "; ".join(parts))
 
 
 def run_estimate(
@@ -82,14 +103,17 @@ def run_estimate(
     max_completions: int,
     threads: int | None,
     quiet: bool = False,
+    half_typed: str = "homozygous",
+    drb345: bool = True,
 ) -> int:
     say = (lambda *a: None) if quiet else print
     loci = [l for l, _ in loci_res]
     t0 = time.perf_counter()
-    ds, fmt = read_input(input_path, fmt, mac, loci)
+    ds, fmt = read_input(input_path, fmt, mac, loci, half_typed, drb345)
     nom = Nomenclature(str(nom_dir))
     t1 = time.perf_counter()
     say(f"Read {len(ds)} samples from {input_path} ({fmt.upper()}); {len(ds.issues)} lines unreadable")
+    describe_fills(ds.fill_counts(), say)
     missing, half = ds.missing_counts(), ds.one_allele_counts()
     for locus, res in loci_res:
         say(f"  {locus:6} -> {res:6} untyped: {missing[locus]:6}  one allele typed: {half[locus]:6}")
@@ -144,6 +168,7 @@ def run_estimate(
             "min_genotype_frequency": min_genotype_frequency,
             "max_completions": max_completions,
         },
+        "filling": {"half_typed": half_typed, "drb345_from_drb1": drb345, "filled": ds.fill_counts()},
         "samples_read": len(ds),
         "samples_used": est.n_samples,
         "samples_incomplete": est.n_samples_incomplete,
@@ -203,6 +228,8 @@ def cmd_estimate(args) -> int:
         max_completions=args.max_completions,
         threads=args.threads,
         quiet=args.quiet,
+        half_typed=args.half_typed,
+        drb345=not args.no_drb345,
     )
 
 
@@ -247,6 +274,8 @@ def cmd_haplomat(args) -> int:
         max_completions=args.max_completions,
         threads=args.threads,
         quiet=args.quiet,
+        half_typed=args.half_typed,
+        drb345=not args.no_drb345,
     )
 
 
@@ -257,8 +286,9 @@ def cmd_summary(args) -> int:
         folder, manifest = find_data(args.data_dir)
         mac = folder / "mac" / "alpha.v3.txt" if folder and "mac" in manifest else None
     loci = args.loci.split(",") if args.loci else None
-    ds, fmt = read_input(args.input, args.format, mac, loci)
+    ds, fmt = read_input(args.input, args.format, mac, loci, args.half_typed, not args.no_drb345)
     print(f"{ds!r} ({fmt.upper()})")
+    describe_fills(ds.fill_counts(), print)
     missing, half = ds.missing_counts(), ds.one_allele_counts()
     for locus in ds.loci:
         print(f"  {locus:6} untyped: {missing[locus]:6}   one allele typed: {half[locus]:6}")
@@ -313,7 +343,13 @@ def cmd_families(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
 
     t0 = time.perf_counter()
-    data = read_family_table(args.input, mac_codes=str(mac) if mac and mac.exists() else None, loci=loci)
+    data = read_family_table(
+        args.input,
+        mac_codes=str(mac) if mac and mac.exists() else None,
+        loci=loci,
+        half_typed=args.half_typed,
+        drb345=not args.no_drb345,
+    )
     nom = Nomenclature(str(nom_dir))
     fams = data.families()
     say(
@@ -322,6 +358,7 @@ def cmd_families(args) -> int:
     )
     for line, sid, reason in data.issues[:10]:
         say(f"  {sid or f'line {line}'}: {reason}")
+    describe_fills(data.fill_counts(), say)
 
     mendel = check_mendelian(data, nom, res)
     _tsv(
@@ -422,6 +459,11 @@ def cmd_families(args) -> int:
         "mac_last_updated": manifest.get("mac", {}).get("last_updated"),
         "use_family_phase": not args.no_family_phase,
         "parameters": {**em, "cut": args.cut, "renormalize": not args.no_renormalize},
+        "filling": {
+            "half_typed": args.half_typed,
+            "drb345_from_drb1": not args.no_drb345,
+            "filled": data.fill_counts(),
+        },
         "people": len(data),
         "families": len(fams),
         "phasing": statuses,
@@ -453,6 +495,21 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--data-dir", help="folder with manifest.json (default: $HLAHAPLOTOOLS_DATA or ./data)")
         p.add_argument("--nomenclature", help="lookup tables folder (default: from the manifest)")
         p.add_argument("--mac-codes", help="NMDP alpha.v3.txt (default: from the manifest)")
+        fill_options(p)
+
+    def fill_options(p):
+        p.add_argument(
+            "--half-typed",
+            choices=["homozygous", "unknown"],
+            default="homozygous",
+            help="one allele typed, the other blank: homozygous copies it across (reporting convention, "
+            "default); unknown keeps the second allele unknown",
+        )
+        p.add_argument(
+            "--no-drb345",
+            action="store_true",
+            help="do not complete DRB3/4/5 from DRB1 (absent genes, hemizygous typings)",
+        )
 
     def run_options(p):
         p.add_argument(
@@ -524,6 +581,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--loci", help="comma-separated loci to keep")
     s.add_argument("--data-dir")
     s.add_argument("--mac-codes")
+    fill_options(s)
     s.set_defaults(func=cmd_summary)
     return parser
 

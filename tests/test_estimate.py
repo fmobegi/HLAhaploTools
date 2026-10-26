@@ -68,8 +68,12 @@ def test_missing_loci_are_used_not_dropped(nom, tmp_path):
     rows += [f"h{i}\t01:01\t01:01\t08:01\t08:01" for i in range(10)]
     rows += [f"k{i}\t02:01\t02:01\t07:02\t07:02" for i in range(10)]
     rows += ["m1\t01:01\t01:01\t\t", "m2\t\t\t07:02\t07:02", "m3\t01:01\t\t08:01\t08:01"]
-    est = h.estimate(h.read_mac(write(tmp_path, "\n".join(rows) + "\n")), nom, "2f", epsilon=1e-10)
+    path = write(tmp_path, "\n".join(rows) + "\n")
+    est = h.estimate(h.read_mac(path, half_typed="unknown"), nom, "2f", epsilon=1e-10)
     assert est.n_samples == 23 and est.n_samples_incomplete == 3
+    # By default m3's blank second A allele means homozygous: only m1 and m2 stay incomplete.
+    default = h.estimate(h.read_mac(path), nom, "2f", epsilon=1e-10)
+    assert default.n_samples_incomplete == 2
     # m1 adds two copies of A*01:01~B*08:01, m2 two of A*02:01~B*07:02,
     # m3 at least one more A*01:01~B*08:01.
     assert freq(est, "A*01:01~B*08:01") > 22 / 46

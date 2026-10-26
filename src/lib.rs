@@ -81,6 +81,28 @@ mod _core {
     #[pyclass(name = "Dataset", module = "hlahaplotools._core", frozen)]
     struct Dataset {
         inner: hh::Dataset,
+        /// What reading filled in (homozygous copies, DRB3/4/5 rules), per locus.
+        fills: Vec<hh::FillCount>,
+    }
+
+    fn fill_options(half_typed: &str, drb345: bool) -> PyResult<hh::FillOptions> {
+        Ok(hh::FillOptions {
+            half_typed: half_typed.parse().map_err(PyValueError::new_err)?,
+            drb345_from_drb1: drb345,
+        })
+    }
+
+    /// {locus: {"homozygous": n, "absent_gene": n, "drb_completed": n}}, loci with fills only.
+    fn fills_to_py<'py>(py: Python<'py>, fills: &[hh::FillCount]) -> PyResult<Bound<'py, PyDict>> {
+        let out = PyDict::new(py);
+        for f in fills.iter().filter(|f| f.total() > 0) {
+            let d = PyDict::new(py);
+            d.set_item("homozygous", f.homozygous)?;
+            d.set_item("absent_gene", f.absent_gene)?;
+            d.set_item("drb_completed", f.drb_completed)?;
+            out.set_item(&f.locus, d)?;
+        }
+        Ok(out)
     }
 
     impl Dataset {
@@ -142,9 +164,14 @@ mod _core {
             self.per_locus(py, self.inner.missing_counts())
         }
 
-        /// Number of samples with only one allele typed at each locus.
+        /// Number of samples with only one allele typed at each locus (after filling).
         fn one_allele_counts<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
             self.per_locus(py, self.inner.one_allele_counts())
+        }
+
+        /// What reading filled in, per locus: {"A": {"homozygous": 12, ...}, ...}.
+        fn fill_counts<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+            fills_to_py(py, &self.fills)
         }
 
         fn __len__(&self) -> usize {
@@ -162,16 +189,13 @@ mod _core {
         }
     }
 
-    /// Shared body of read_mac / read_glsc.
-    ///
-    /// `mac_codes` may be a loaded MacCodes, or a path to alpha.v3.txt; with a
-    /// path, only the codes that appear in the input file are loaded.
-    fn read_with(
-        path: PathBuf,
+    /// Run `read` with the MAC table given as a loaded MacCodes or a path to
+    /// alpha.v3.txt; with a path, only the codes used in `path` are loaded.
+    fn with_mac<T>(
+        path: &PathBuf,
         mac_codes: Option<&Bound<'_, PyAny>>,
-        loci: Option<Vec<String>>,
-        reader: fn(&PathBuf, &hh::ParseOptions) -> Result<hh::Dataset, hh::Error>,
-    ) -> PyResult<Dataset> {
+        read: impl FnOnce(Option<&hh::MacDictionary>) -> Result<T, hh::Error>,
+    ) -> PyResult<T> {
         let loaded;
         let mac: Option<&hh::MacDictionary> = match mac_codes {
             None => None,
@@ -179,7 +203,7 @@ mod _core {
                 Ok(m) => Some(&m.get().inner),
                 Err(_) => {
                     let mac_path: PathBuf = obj.extract()?;
-                    let wanted = hh::collect_mac_codes_in_file(&path).map_err(to_py_err)?;
+                    let wanted = hh::collect_mac_codes_in_file(path).map_err(to_py_err)?;
                     if wanted.is_empty() {
                         None // no MAC codes in the input: skip scanning the big table
                     } else {
@@ -190,32 +214,54 @@ mod _core {
                 }
             },
         };
-        let opts = hh::ParseOptions { loci, mac };
-        Ok(Dataset {
-            inner: reader(&path, &opts).map_err(to_py_err)?,
-        })
+        read(mac).map_err(to_py_err)
     }
 
-    /// Read a Hapl-o-Mat MAC file (tab-separated, two columns per locus).
+    /// Shared body of read_mac / read_glsc: read, then fill blanks.
+    fn read_with(
+        path: PathBuf,
+        mac_codes: Option<&Bound<'_, PyAny>>,
+        loci: Option<Vec<String>>,
+        fill: hh::FillOptions,
+        reader: fn(&PathBuf, &hh::ParseOptions) -> Result<hh::Dataset, hh::Error>,
+    ) -> PyResult<Dataset> {
+        let mut ds = with_mac(&path, mac_codes, |mac| {
+            reader(&path, &hh::ParseOptions { loci, mac })
+        })?;
+        let fills = hh::fill_dataset(&mut ds, &fill);
+        Ok(Dataset { inner: ds, fills })
+    }
+
+    /// Read a MAC table (tab-separated, two columns per locus).
+    ///
+    /// `half_typed`: "homozygous" (default) copies a single typed allele across;
+    /// "unknown" keeps the second allele unknown. `drb345`: fill DRB3/4/5 from DRB1.
     #[pyfunction]
-    #[pyo3(signature = (path, mac_codes=None, loci=None))]
+    #[pyo3(signature = (path, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true))]
     fn read_mac(
         path: PathBuf,
         mac_codes: Option<&Bound<'_, PyAny>>,
         loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
     ) -> PyResult<Dataset> {
-        read_with(path, mac_codes, loci, |p, o| hh::read_mac_file(p, o))
+        let fill = fill_options(half_typed, drb345)?;
+        read_with(path, mac_codes, loci, fill, |p, o| hh::read_mac_file(p, o))
     }
 
-    /// Read a Hapl-o-Mat GLSC file (ID followed by one GL string per locus).
+    /// Read a GL string table (ID followed by one GL string per locus).
+    /// `half_typed` and `drb345` as for read_mac.
     #[pyfunction]
-    #[pyo3(signature = (path, mac_codes=None, loci=None))]
+    #[pyo3(signature = (path, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true))]
     fn read_glsc(
         path: PathBuf,
         mac_codes: Option<&Bound<'_, PyAny>>,
         loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
     ) -> PyResult<Dataset> {
-        read_with(path, mac_codes, loci, |p, o| hh::read_glsc_file(p, o))
+        let fill = fill_options(half_typed, drb345)?;
+        read_with(path, mac_codes, loci, fill, |p, o| hh::read_glsc_file(p, o))
     }
 
     /// Classify one typing (without locus prefix), e.g. "24:DXTW" -> "mac".
@@ -516,16 +562,23 @@ mod _core {
     struct FamilyData {
         ds: hh::Dataset,
         ped: hh::Pedigree,
+        fills: Vec<hh::FillCount>,
     }
 
     #[pymethods]
     impl FamilyData {
-        /// The typing data (all members), as a Dataset.
+        /// The typing data (all members, after filling), as a Dataset.
         #[getter]
         fn dataset(&self) -> Dataset {
             Dataset {
                 inner: self.ds.clone(),
+                fills: self.fills.clone(),
             }
+        }
+
+        /// What reading filled in, per locus (see Dataset.fill_counts).
+        fn fill_counts<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+            fills_to_py(py, &self.fills)
         }
 
         #[getter]
@@ -589,34 +642,22 @@ mod _core {
     /// Read a family table (CSV/TSV with FAMILY_ID, Family_Member and LOCUS_1/LOCUS_2 columns).
     ///
     /// `mac_codes`: a MacCodes or a path to alpha.v3.txt, if the table uses MAC codes.
+    /// `half_typed` and `drb345` as for read_mac.
     #[pyfunction]
-    #[pyo3(signature = (path, mac_codes=None, loci=None))]
+    #[pyo3(signature = (path, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true))]
     fn read_family_table(
         path: PathBuf,
         mac_codes: Option<&Bound<'_, PyAny>>,
         loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
     ) -> PyResult<FamilyData> {
-        let loaded;
-        let mac = match mac_codes {
-            None => None,
-            Some(obj) => match obj.cast::<MacCodes>() {
-                Ok(m) => Some(&m.get().inner),
-                Err(_) => {
-                    let mac_path: PathBuf = obj.extract()?;
-                    let wanted = hh::collect_mac_codes_in_file(&path).map_err(to_py_err)?;
-                    if wanted.is_empty() {
-                        None
-                    } else {
-                        loaded = hh::MacDictionary::from_path_only(mac_path, &wanted)
-                            .map_err(to_py_err)?;
-                        Some(&loaded)
-                    }
-                }
-            },
-        };
-        let (ds, ped) =
-            hh::read_family_table(path, &hh::ParseOptions { loci, mac }).map_err(to_py_err)?;
-        Ok(FamilyData { ds, ped })
+        let fill = fill_options(half_typed, drb345)?;
+        let (mut ds, ped) = with_mac(&path, mac_codes, |mac| {
+            hh::read_family_table(&path, &hh::ParseOptions { loci, mac })
+        })?;
+        let fills = hh::fill_dataset(&mut ds, &fill);
+        Ok(FamilyData { ds, ped, fills })
     }
 
     /// Check each child against its parents at the target resolution.

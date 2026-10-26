@@ -156,6 +156,9 @@ def main() -> int:
         # ---- reference: all members
         ref_phases, ref_mendel, data = phase_rows(tmp, header, rows, nom, res, mac)
         ref = {p.family: p for p in ref_phases}
+        # Each person's typing as the tool reads it (blank alleles filled), by sample ID.
+        ds = data.dataset
+        as_read = {sid: ds.sample(i) for i, sid in enumerate(ds.ids)}
         print(f"\nREFERENCE (all members): {len(ref_phases)} families, {len(data)} people")
         for p in ref_phases:
             n_unknown = sum(a.endswith("*?") for hap in p.haplotypes for a in alleles(hap)) if p.haplotypes[0] else None
@@ -249,13 +252,18 @@ def main() -> int:
                             )
                             if kind == "rebuilt":
                                 actual = next(r for r in members if is_parent(r, drop))
-                                geno.update(_genotype_check(p.haplotypes[2 * i : 2 * i + 2], actual, res, nom))
+                                sid = (
+                                    actual.get("Sample_ID") or ""
+                                ).strip() or f"{fam}/{actual['Family_Member'].strip()}"
+                                geno.update(
+                                    _genotype_check(p.haplotypes[2 * i : 2 * i + 2], as_read[sid], actual, res, nom)
+                                )
         for kind in ("rebuilt", "known"):
             print(f"   {kind} parent:")
             _print_scores(miss_totals[kind], indent="     ")
         print("   rebuilt parent's alleles vs. that parent's own typing (same resolution):")
         total = sum(geno.values())
-        for k in ("in typing", "not in typing", "parent untyped here"):
+        for k in ("in typing", "in place of a blank", "not in typing", "parent untyped here"):
             print(f"     {k:20} {geno[k]:5} ({geno[k] / total:.1%})")
         report["one_parent_missing"] = {
             "rebuilt": dict(miss_totals["rebuilt"]),
@@ -278,27 +286,34 @@ def main() -> int:
     return 0
 
 
-def _genotype_check(haps: list[str], actual: dict, res: dict, nom) -> Counter:
-    """Is each recovered allele of a rebuilt parent part of that parent's real typing?"""
+def _genotype_check(haps: list[str], actual: dict[str, str | None], row: dict, res: dict, nom) -> Counter:
+    """Is each recovered allele of a rebuilt parent part of that parent's own typing (as read, blanks filled)?
+
+    An allele outside the typing at a locus whose second allele was left blank in
+    the file (and read as homozygous) is counted apart: the children show the blank
+    hid a second allele."""
     out = Counter()
     for a1, a2 in zip(alleles(haps[0]), alleles(haps[1]), strict=True):
         locus = a1.split("*")[0]
         typed = set()
-        for col in (f"{locus}_1", f"{locus}_2"):
-            v = (actual.get(col) or "").strip()
-            if v in ("", "NA"):
+        for part in re.split(r"[|+/]", actual.get(locus) or ""):
+            if not part:
                 continue
-            name = v if "*" in v and not v.startswith("*") else f"{locus}*{v.lstrip('*')}"
-            for part in name.split("/"):
-                part = part if part.startswith(locus + "*") else f"{locus}*{part.split('*')[-1]}"
-                try:
-                    typed.update(c for c, _ in nom.translate(part, res[locus]))
-                except ValueError:
-                    typed.add(part)
+            try:
+                typed.update(c for c, _ in nom.translate(part, res[locus]))
+            except ValueError:
+                typed.add(part)  # not in the tables (asItIs loci, DRBx*NNNN)
         for a in (a1, a2):
             if a.endswith("*?"):
                 continue
-            out["parent untyped here" if not typed else ("in typing" if a in typed else "not in typing")] += 1
+            if not typed:
+                out["parent untyped here"] += 1
+            elif a in typed:
+                out["in typing"] += 1
+            elif sum(bool((row.get(f"{locus}_{j}") or "").strip(" NA")) for j in (1, 2)) == 1:
+                out["in place of a blank"] += 1
+            else:
+                out["not in typing"] += 1
     return out
 
 

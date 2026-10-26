@@ -27,10 +27,10 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Error;
 use crate::dataset::Dataset;
-use crate::estimate::{LocusGeno, ResolvedSample, WILD, resolve_dataset};
+use crate::estimate::{LocusGeno, ResolvedSample, WILD};
 use crate::family::{
     Family, HAPLOTYPE_LABELS, ParentLocus, Pedigree, PhaseStatus, child_possible, options_text,
-    parent_has, phase_one,
+    parent_has, phase_one, resolve_families,
 };
 use crate::intern::{AlleleId, AlleleTable};
 use crate::nomenclature::Nomenclature;
@@ -251,7 +251,7 @@ pub fn audit_families(
     resolutions: &[Resolution],
     opts: &AuditOptions,
 ) -> Result<Vec<PedigreeFlag>, Error> {
-    let (resolver, resolved, issues) = resolve_dataset(ds, nom, resolutions)?;
+    let ((resolver, resolved, issues), _) = resolve_families(ds, ped, nom, resolutions)?;
     let codes = &resolver.codes;
     let mut family_of: FxHashMap<usize, &str> = FxHashMap::default();
     for f in &ped.families {

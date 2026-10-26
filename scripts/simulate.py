@@ -4,7 +4,7 @@ Used to (1) compare with Hapl-o-Mat on data with real linkage and (2) check
 that estimates with untyped loci stay close to the truth.
 
     uv run python scripts/simulate.py out/ --samples 5000 --loci A,B,C,DRB1,DQB1 \
-        --missing DQB1:0.2,C:0.1 --format mac --seed 1
+        --missing DQB1:0.2,C:0.1 --blank-homozygous 1 --format mac --seed 1
 
 Writes:
     out/population.dat (MAC) or out/population.glc (GLSC)
@@ -166,6 +166,8 @@ def write_families(args, rng: random.Random, loci, haps, freqs, missing: dict[st
                 for k, locus in enumerate(loci):
                     if rng.random() < missing.get(locus, 0.0):
                         cells += ["", ""]
+                    elif h1[k] == h2[k] and rng.random() < args.blank_homozygous:
+                        cells += [h1[k], ""]
                     else:
                         cells += [h1[k], h2[k]]
                 out.write(",".join([fid, role, *cells]) + "\n")
@@ -181,7 +183,17 @@ def main() -> None:
     ap.add_argument("--haplotypes", type=int, default=300, help="distinct true haplotypes")
     ap.add_argument("--alleles", type=int, default=25, help="alleles per locus to draw from")
     ap.add_argument("--missing", default="", help="per-locus untyped rate, e.g. DQB1:0.2,C:0.1")
-    ap.add_argument("--half", default="", help="per-locus rate of one allele untyped, e.g. C:0.05")
+    ap.add_argument(
+        "--half",
+        default="",
+        help="per-locus rate of one allele dropped at random, e.g. C:0.05 (read with --half-typed unknown)",
+    )
+    ap.add_argument(
+        "--blank-homozygous",
+        type=float,
+        default=0.0,
+        help="chance a homozygous locus is written with the second allele blank, as labs often report it",
+    )
     ap.add_argument(
         "--ambiguity",
         type=float,
@@ -241,6 +253,8 @@ def main() -> None:
                 per_locus.append(None)
             elif rng.random() < half.get(locus, 0.0):
                 per_locus.append((a, None) if rng.random() < 0.5 else (b, None))
+            elif a == b and rng.random() < args.blank_homozygous:
+                per_locus.append((a, None))
             else:
                 per_locus.append((a, b))
         rows.append((f"s{i + 1}", per_locus))
@@ -279,7 +293,7 @@ def main() -> None:
     ext = "dat" if args.format == "mac" else "glc"
     path = args.out / f"population.{ext}"
     write(path, rows)
-    if missing or half:
+    if missing or half or args.blank_homozygous:
         # The same samples before any typing was removed, for comparison.
         write(args.out / f"population_full.{ext}", full_rows)
         # Only the samples with every locus fully typed (what Hapl-o-Mat would use).

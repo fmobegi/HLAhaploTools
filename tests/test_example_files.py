@@ -58,9 +58,48 @@ def test_manifest_records_release_mac_date_and_tables():
 def test_half_typed_and_missing_loci(tmp_path):
     f = tmp_path / "x.dat"
     f.write_text("id\tA\tA\tB\tB\n1\t01:01\t\t07:02\t08:01\n2\t\t\t07:02\t07:02\n")
-    ds = h.read_mac(f)
+    ds = h.read_mac(f, half_typed="unknown")
     assert ds.sample(0)["A"] == "A*01:01+"
     assert ds.sample(1)["A"] is None
     assert ds.sample(1)["B"] == "B*07:02+B*07:02"
     assert ds.missing_counts() == {"A": 1, "B": 0}
     assert ds.one_allele_counts() == {"A": 1, "B": 0}
+    assert ds.fill_counts() == {}
+
+
+def test_blank_second_allele_means_homozygous_by_default(tmp_path):
+    f = tmp_path / "x.dat"
+    f.write_text("id\tA\tA\tB\tB\n1\t01:01\t\t07:02\t08:01\n2\t\t\t07:02\t07:02\n")
+    ds = h.read_mac(f)
+    assert ds.sample(0)["A"] == "A*01:01+A*01:01"
+    assert ds.sample(1)["A"] is None  # a fully blank locus stays untyped
+    assert ds.one_allele_counts() == {"A": 0, "B": 0}
+    assert ds.fill_counts() == {"A": {"homozygous": 1, "absent_gene": 0, "drb_completed": 0}}
+    with pytest.raises(ValueError):
+        h.read_mac(f, half_typed="maybe")
+
+
+def test_drb345_follow_drb1(tmp_path):
+    f = tmp_path / "x.dat"
+    f.write_text(
+        "id\tDRB1\tDRB1\tDRB3\tDRB3\tDRB4\tDRB4\tDRB5\tDRB5\n"
+        # DR52 + DR53: one DRB3 and one DRB4 copy, no DRB5.
+        "1\t03:01\t07:01\t01:01\t\t01:01\t\t\t\n"
+        # Two DR52 groups: a single DRB3 allele is homozygous.
+        "2\t03:01\t11:01\t02:02\t\t\t\t\t\n"
+        # DRB1*01 and *08 carry none of the three genes.
+        "3\t01:01\t08:01\t\t\t\t\t\t\n"
+    )
+    ds = h.read_mac(f)
+    assert ds.sample(0)["DRB3"] == "DRB3*01:01+DRB3*NNNN"
+    assert ds.sample(0)["DRB4"] == "DRB4*01:01+DRB4*NNNN"
+    assert ds.sample(0)["DRB5"] == "DRB5*NNNN+DRB5*NNNN"
+    assert ds.sample(1)["DRB3"] == "DRB3*02:02+DRB3*02:02"
+    assert ds.sample(2)["DRB3"] == "DRB3*NNNN+DRB3*NNNN"
+    fills = ds.fill_counts()
+    assert fills["DRB3"] == {"homozygous": 1, "absent_gene": 2, "drb_completed": 1}
+    assert fills["DRB5"]["absent_gene"] == 6
+    # Without the rules a blank DRB3/4/5 is left as it is, never copied.
+    raw = h.read_mac(f, drb345=False)
+    assert raw.sample(0)["DRB3"] == "DRB3*01:01+"
+    assert raw.sample(2)["DRB3"] is None

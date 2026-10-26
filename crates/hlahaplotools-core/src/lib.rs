@@ -15,6 +15,7 @@ pub mod dataset;
 pub mod error;
 pub mod estimate;
 pub mod family;
+pub mod fill;
 pub mod intern;
 pub mod mac;
 pub mod nomenclature;
@@ -32,6 +33,7 @@ pub use family::{
     Pedigree, PhaseStatus, Role, check_mendelian, compare_to_families, estimate_families,
     phase_families, read_family_table, read_family_table_from,
 };
+pub use fill::{FillCount, FillOptions, HalfTyped, fill_dataset};
 pub use intern::{AlleleId, AlleleTable};
 pub use mac::MacDictionary;
 pub use nomenclature::Nomenclature;

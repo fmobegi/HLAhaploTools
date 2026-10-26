@@ -61,6 +61,10 @@ impl Resolver<'_> {
         typing: &str,
     ) -> Result<Vec<AlleleId>, String> {
         let typing = typing.trim();
+        // `NNNN` marks an absent gene (DRB3/4/5 on haplotypes that lack it).
+        if typing.eq_ignore_ascii_case("NNNN") {
+            return Ok(vec![self.table.intern(locus_idx, &format!("{locus}*NNNN"))]);
+        }
         match classify(typing) {
             None => Err(format!("unrecognised typing {locus}*{typing}")),
             Some(TypingKind::Mac) => {
@@ -270,6 +274,7 @@ pub fn read_mac<R: BufRead>(reader: R, opts: &ParseOptions) -> Result<Dataset, E
         samples,
         alleles: resolver.table,
         issues,
+        copied: Vec::new(),
     })
 }
 
@@ -378,6 +383,7 @@ pub fn read_glsc<R: BufRead>(reader: R, opts: &ParseOptions) -> Result<Dataset, 
         samples,
         alleles: resolver.table,
         issues,
+        copied: Vec::new(),
     })
 }
 
@@ -693,6 +699,7 @@ pub fn read_table<R: BufRead>(
             samples,
             alleles: resolver.table,
             issues,
+            copied: Vec::new(),
         },
         ids,
     ))

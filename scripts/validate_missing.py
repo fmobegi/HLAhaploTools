@@ -39,7 +39,7 @@ def tvd(est: list[tuple[str, float]], truth: dict[str, float]) -> float:
 
 def run(path: Path, nom: h.Nomenclature) -> tuple[h.Estimate, int]:
     """Estimate at the typed (2-field) resolution; return the estimate and sample count."""
-    ds = h.read_mac(str(path))
+    ds = h.read_mac(str(path), half_typed="unknown")  # --half drops alleles at random
     return h.estimate(ds, nom, "asItIs", epsilon=1e-7), len(ds)
 
 

@@ -24,9 +24,10 @@ use std::path::Path;
 use rustc_hash::FxHashMap;
 
 use crate::Error;
-use crate::dataset::{Dataset, Issue};
+use crate::dataset::{Dataset, Issue, LocusObs};
 use crate::estimate::{
-    EmOptions, Estimate, LocusGeno, ResolvedSample, WILD, estimate_resolved, resolve_dataset,
+    EmOptions, Estimate, LocusGeno, Resolved, ResolvedSample, WILD, estimate_resolved,
+    resolve_dataset,
 };
 use crate::intern::{AlleleId, AlleleTable};
 use crate::nomenclature::Nomenclature;
@@ -291,6 +292,115 @@ fn mendel_resolved(
     out
 }
 
+/// Most members whose copied alleles are tried in every combination; above
+/// this, all copies at the locus are undone together.
+const MAX_COPIES_SEARCHED: usize = 12;
+
+/// Resolve the family data, then undo homozygous copies that break Mendelian
+/// inheritance.
+///
+/// [`crate::fill_dataset`] reads a blank second allele as homozygous. In a
+/// family that reading can be checked: when no inheritance pattern fits a
+/// locus, the copies made there are undone (the blank is read as untyped) for
+/// the fewest members that make the locus fit. When several smallest sets
+/// work, all of their members are undone, since none can be preferred. When
+/// even undoing every copy does not help, the copies stay and the locus is
+/// reported as inconsistent as usual. Returns one list of notes per family.
+pub(crate) fn resolve_families<'a>(
+    ds: &'a Dataset,
+    ped: &Pedigree,
+    nom: &'a Nomenclature,
+    resolutions: &'a [Resolution],
+) -> Result<(Resolved<'a>, Vec<Vec<String>>), Error> {
+    let (mut resolver, mut resolved, issues) = resolve_dataset(ds, nom, resolutions)?;
+    let mut notes = vec![Vec::new(); ped.families.len()];
+    let copied: FxHashMap<(usize, usize), &[AlleleId]> = ds
+        .copied
+        .iter()
+        .map(|c| ((c.sample, c.locus), c.typed.as_slice()))
+        .collect();
+    if copied.is_empty() {
+        return Ok(((resolver, resolved, issues), notes));
+    }
+    for (fi, fam) in ped.families.iter().enumerate() {
+        let children: Vec<usize> = fam
+            .children
+            .iter()
+            .copied()
+            .filter(|&c| resolved[c].is_some())
+            .collect();
+        if children.is_empty() {
+            continue;
+        }
+        let members: Vec<usize> = fam
+            .father
+            .into_iter()
+            .chain(fam.mother)
+            .chain(children.iter().copied())
+            .filter(|&m| resolved[m].is_some())
+            .collect();
+        for k in 0..ds.loci.len() {
+            // Members copied at this locus, with their genotypes read as half-typed.
+            let mut undo: Vec<(usize, Vec<(LocusGeno, f64)>)> = Vec::new();
+            for &m in &members {
+                if let Some(typed) = copied.get(&(m, k))
+                    && let Ok(half) = resolver.locus(&LocusObs::OneAllele(typed.to_vec()))
+                {
+                    undo.push((m, half));
+                }
+            }
+            if undo.is_empty() {
+                continue;
+            }
+            // Does the locus fit when the members in `mask` are read as half-typed?
+            let fits = |mask: u32| -> bool {
+                let get = |m: usize| -> &[(LocusGeno, f64)] {
+                    match undo.iter().position(|(u, _)| *u == m) {
+                        Some(j) if mask & (1 << j) != 0 => &undo[j].1,
+                        _ => &resolved[m].as_ref().unwrap().per_locus[k],
+                    }
+                };
+                let parent = |p: Option<usize>| p.filter(|&i| resolved[i].is_some()).map(get);
+                let kids: Vec<&[(LocusGeno, f64)]> = children.iter().map(|&c| get(c)).collect();
+                LocusModel::build(parent(fam.father), parent(fam.mother), &kids).fits()
+            };
+            if fits(0) {
+                continue;
+            }
+            let n = undo.len();
+            let chosen: u32 = if n > MAX_COPIES_SEARCHED {
+                let all = (1u32 << n.min(31)) - 1;
+                if fits(all) { all } else { 0 }
+            } else {
+                (1..=n as u32)
+                    .map(|size| {
+                        (1u32..1 << n)
+                            .filter(|m| m.count_ones() == size && fits(*m))
+                            .fold(0, |acc, m| acc | m)
+                    })
+                    .find(|&union| union != 0)
+                    .unwrap_or(0)
+            };
+            if chosen == 0 {
+                continue;
+            }
+            let mut ids = Vec::new();
+            for (j, (m, half)) in undo.into_iter().enumerate() {
+                if chosen & (1 << j) != 0 {
+                    ids.push(ds.samples[m].id.clone());
+                    resolved[m].as_mut().unwrap().per_locus[k] = half;
+                }
+            }
+            notes[fi].push(format!(
+                "{}: blank second allele of {} read as untyped, not homozygous (copying it breaks Mendelian inheritance)",
+                ds.loci[k],
+                ids.join(", ")
+            ));
+        }
+    }
+    Ok(((resolver, resolved, issues), notes))
+}
+
 /// Check every child against its parents, locus by locus, at the target
 /// resolution. Also reports families that cannot be phased.
 pub fn check_mendelian(
@@ -299,7 +409,7 @@ pub fn check_mendelian(
     nom: &Nomenclature,
     resolutions: &[Resolution],
 ) -> Result<Vec<MendelIssue>, Error> {
-    let (resolver, resolved, _) = resolve_dataset(ds, nom, resolutions)?;
+    let ((resolver, resolved, _), _) = resolve_families(ds, ped, nom, resolutions)?;
     Ok(mendel_resolved(ds, ped, &resolved, &resolver.codes))
 }
 
@@ -506,6 +616,13 @@ impl LocusModel {
             }
         }
         LocusModel { quads, groups }
+    }
+
+    /// Does some inheritance pattern fit every child at this locus?
+    fn fits(&self) -> bool {
+        self.groups
+            .iter()
+            .any(|(masks, _)| masks.iter().all(|&m| m != 0))
     }
 
     /// Groups of quads consistent with an inheritance assignment (one 0..4 code per child).
@@ -800,6 +917,17 @@ fn carries_one_haplotype_twice(loci: &[ParentLocus]) -> bool {
     seen
 }
 
+/// Put the notes from [`resolve_families`] first on each family's phase.
+fn with_fill_notes(mut phases: Vec<FamilyPhase>, notes: Vec<Vec<String>>) -> Vec<FamilyPhase> {
+    for (p, mut n) in phases.iter_mut().zip(notes) {
+        if !n.is_empty() {
+            n.append(&mut p.notes);
+            p.notes = n;
+        }
+    }
+    phases
+}
+
 /// Phase every family at the target resolution.
 pub fn phase_families(
     ds: &Dataset,
@@ -807,12 +935,14 @@ pub fn phase_families(
     nom: &Nomenclature,
     resolutions: &[Resolution],
 ) -> Result<Vec<FamilyPhase>, Error> {
-    let (resolver, resolved, _) = resolve_dataset(ds, nom, resolutions)?;
-    Ok(ped
-        .families
-        .iter()
-        .map(|f| phase_one(f, ds, &resolved, &resolver.codes))
-        .collect())
+    let ((resolver, resolved, _), notes) = resolve_families(ds, ped, nom, resolutions)?;
+    Ok(with_fill_notes(
+        ped.families
+            .iter()
+            .map(|f| phase_one(f, ds, &resolved, &resolver.codes))
+            .collect(),
+        notes,
+    ))
 }
 
 // ------------------------------------------------------------ estimation
@@ -836,13 +966,15 @@ pub fn estimate_families(
     use_family_phase: bool,
 ) -> Result<(Estimate, Vec<FamilyPhase>), Error> {
     let clock = std::time::Instant::now();
-    let (resolver, resolved, mut issues) = resolve_dataset(ds, nom, resolutions)?;
+    let ((resolver, resolved, mut issues), notes) = resolve_families(ds, ped, nom, resolutions)?;
     issues.extend(ped.issues.iter().cloned());
-    let phases: Vec<FamilyPhase> = ped
-        .families
-        .iter()
-        .map(|f| phase_one(f, ds, &resolved, &resolver.codes))
-        .collect();
+    let phases: Vec<FamilyPhase> = with_fill_notes(
+        ped.families
+            .iter()
+            .map(|f| phase_one(f, ds, &resolved, &resolver.codes))
+            .collect(),
+        notes,
+    );
 
     let mut samples: Vec<ResolvedSample> = ped
         .unrelated
@@ -1153,6 +1285,48 @@ mod tests {
             "{:?}",
             p.notes
         );
+    }
+
+    #[test]
+    fn homozygous_copy_that_breaks_mendel_is_undone() {
+        // M and C2 each have one A allele typed. Read as homozygous, C2 (02:01
+        // twice) cannot come from M (01:01 twice). Undoing either copy fixes it,
+        // so both are undone. B shows the copies are not needed elsewhere.
+        let table = "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2\n\
+            f1,F,02:07,02:01,07:02,08:01\n\
+            f1,M,01:01,,35:01,44:02\n\
+            f1,C1,01:01,02:07,07:02,35:01\n\
+            f1,C2,02:01,,08:01,44:02\n\
+            f1,C3,01:01,02:01,08:01,35:01\n";
+        let (mut ds, ped) = load(table);
+        crate::fill_dataset(&mut ds, &crate::FillOptions::default());
+        assert_eq!(ds.copied.len(), 2);
+        let nom = Nomenclature::default();
+        let p = &phase_families(&ds, &ped, &nom, &as_is(&ds)).unwrap()[0];
+        assert!(p.inconsistent_loci.is_empty(), "{:?}", p.notes);
+        assert!(
+            p.notes[0].starts_with("A: blank second allele of f1/M, f1/C2 read as untyped"),
+            "{:?}",
+            p.notes
+        );
+        assert!(
+            check_mendelian(&ds, &ped, &nom, &as_is(&ds))
+                .unwrap()
+                .is_empty()
+        );
+
+        // When the copy fits the family it stays, with no note.
+        let fits = table.replace("f1,C2,02:01,,", "f1,C2,02:01,01:01,");
+        let (mut ds, ped) = load(&fits);
+        crate::fill_dataset(&mut ds, &crate::FillOptions::default());
+        let p = &phase_families(&ds, &ped, &nom, &as_is(&ds)).unwrap()[0];
+        assert!(
+            !p.notes.iter().any(|n| n.contains("blank second allele")),
+            "{:?}",
+            p.notes
+        );
+        assert_eq!(p.haplotypes[2].split('~').next(), Some("A*01:01"));
+        assert_eq!(p.haplotypes[3].split('~').next(), Some("A*01:01"));
     }
 
     #[test]

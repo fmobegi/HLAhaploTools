@@ -60,6 +60,17 @@ pub struct Issue {
     pub message: String,
 }
 
+/// A locus where the one typed allele was copied across (read as homozygous)
+/// by [`crate::fill_dataset`]. Kept so family analyses can undo the copy when
+/// it contradicts Mendelian inheritance.
+#[derive(Debug, Clone)]
+pub struct CopiedAllele {
+    pub sample: usize,
+    pub locus: usize,
+    /// The typed allele (its candidates), as before the copy.
+    pub typed: Vec<AlleleId>,
+}
+
 /// A parsed population sample.
 #[derive(Debug, Clone, Default)]
 pub struct Dataset {
@@ -70,6 +81,8 @@ pub struct Dataset {
     pub alleles: AlleleTable,
     /// Lines that could not be read.
     pub issues: Vec<Issue>,
+    /// Single alleles read as homozygous by [`crate::fill_dataset`].
+    pub copied: Vec<CopiedAllele>,
 }
 
 impl Dataset {
