@@ -186,6 +186,17 @@ def log_likelihood(rows, freqs: dict[str, float]) -> float:
     return total
 
 
+def slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def save_freqs(path: Path, freqs: dict[str, float]) -> None:
+    """Haplotype<TAB>frequency, largest first (for plotting)."""
+    with path.open("w") as f:
+        for h, v in sorted(freqs.items(), key=lambda x: -x[1]):
+            f.write(f"{h}\t{v:.12g}\n")
+
+
 def compare(freqs: dict[str, float], ref: dict[str, float]) -> dict:
     keys = set(freqs) | set(ref)
     diffs = [abs(freqs.get(h, 0.0) - ref.get(h, 0.0)) for h in keys]
@@ -305,10 +316,20 @@ def run_pypop(work: Path, pop: Path, loci, binary: Path, timeout: float, init_co
         f"[Emhaplofreq]\nlociToEstHaplo={':'.join(l.upper() for l in loci)}\nnumInitCond={init_cond}\n"
     )
     r = timed([str(binary), "-c", "config.ini", str(pop), "-o", str(py)], py, timeout)
+    return parse_pypop(py, loci, r)
+
+
+def parse_pypop(py: Path, loci, r: dict) -> dict:
+    """Read PyPop's XML output. PyPop can finish the EM, write the XML and then fail
+    while formatting its text report; the estimate is used and the failure noted."""
     xml = next(py.glob("*-out.xml"), None)
-    if r["status"] != "ok" or xml is None:
-        r.setdefault("status", "failed")
+    if xml is None or "<haplotypefreq>" not in xml.read_text():
+        if r.get("status") == "ok":
+            r["status"] = "no output"
         return r
+    if r.get("status") != "ok":
+        r["note_exit"] = f"{r.get('status')} after writing its estimate (text report failed)"
+        r["status"] = "ok"
     text = xml.read_text()
     block = re.search(r"<haplotypefreq>(.*?)</haplotypefreq>", text, re.S)
     if block is None:
@@ -354,6 +375,9 @@ def run_case(name: str, rows, loci, args, truth: dict[str, float] | None = None,
         print("  " + case["error"])
         return case
     ref_freqs = ref.pop("freqs")
+    save_freqs(work / "freqs_reference.tsv", ref_freqs)
+    if truth:
+        save_freqs(work / "freqs_truth.tsv", truth)
     case["reference"] = {
         "logl": log_likelihood(rows, ref_freqs),
         "haplotypes": len(ref_freqs),
@@ -375,6 +399,8 @@ def run_case(name: str, rows, loci, args, truth: dict[str, float] | None = None,
 
     for tool, r in runs.items():
         freqs = r.pop("freqs", None)
+        if freqs is not None:
+            save_freqs(work / f"freqs_{slug(tool)}.tsv", freqs)
         r.pop("stdout", None)
         if r.get("status") == "ok":
             r.pop("stderr", None)
@@ -448,6 +474,42 @@ def cmd_run(args) -> int:
     return 0
 
 
+def cmd_rescore_pypop(args) -> int:
+    """Re-read existing PyPop outputs (no rerun) and update the scores in benchmark.json."""
+    out = Path(args.out).resolve()
+    path = out / "benchmark.json"
+    bench = json.loads(path.read_text())
+    for case in bench["cases"]:
+        work = out / "cases" / case["case"]
+        r = case.get("tools", {}).get("PyPop")
+        if r is None or not (work / "pypop").exists() or "reference" not in case:
+            continue
+        loci = case["loci"]
+        _, rows = read_mac(work / "input.dat")
+        ref = {h: float(f) for h, f in (l.split("\t") for l in (work / "freqs_reference.tsv").read_text().splitlines())}
+        truth_file = work / "freqs_truth.tsv"
+        truth = (
+            {h: float(f) for h, f in (l.split("\t") for l in truth_file.read_text().splitlines())}
+            if truth_file.exists()
+            else None
+        )
+        r = parse_pypop(work / "pypop", loci, dict(r))
+        freqs = r.pop("freqs", None)
+        if freqs is not None:
+            save_freqs(work / "freqs_pypop.tsv", freqs)
+            total = sum(freqs.values())
+            r["haplotypes"] = len(freqs)
+            r["vs_reference"] = compare(freqs, ref)
+            r["logl"] = log_likelihood(rows, {h: f / total for h, f in freqs.items()})
+            r["delta_logl"] = r["logl"] - case["reference"]["logl"]
+            if truth:
+                r["vs_truth"] = compare(freqs, truth)
+        case["tools"]["PyPop"] = r
+        print(f"{case['case']}: PyPop {r.get('status')} {r.get('note_exit', '')}")
+    path.write_text(json.dumps(bench, indent=2, default=str) + "\n")
+    return 0
+
+
 # ------------------------------------------------------------------ extended loci
 
 # Classical loci first, then MIC and the other loci added in order.
@@ -505,6 +567,8 @@ def cmd_extended(args) -> int:
     if freqs is not None:
         r["vs_truth"] = compare(freqs, truth)
         r["haplotypes"] = len(freqs)
+        save_freqs(work / "freqs_everyone.tsv", freqs)
+        save_freqs(work / "freqs_truth.tsv", truth)
     case["everyone"] = {"n": len(all_rows), "tool": f"hlahaplotools, {args.starts} starts, everyone", **r}
     print(
         f"  everyone ({len(all_rows)} people), hlahaplotools: {r.get('status')}  "
@@ -748,6 +812,10 @@ def main() -> int:
     b.add_argument("--replicates", type=int, default=200)
     b.add_argument("--top", type=int, default=10)
     b.set_defaults(func=cmd_bootstrap)
+
+    rs = sub.add_parser("rescore-pypop", help="re-read PyPop outputs and update benchmark.json")
+    rs.add_argument("--out", default="bench/results")
+    rs.set_defaults(func=cmd_rescore_pypop)
 
     rep = sub.add_parser("report", help="write report.md and benchmark.tsv from the results")
     rep.add_argument("--out", default="bench/results")
