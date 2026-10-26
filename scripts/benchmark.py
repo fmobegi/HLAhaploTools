@@ -540,7 +540,7 @@ def cmd_extended(args) -> int:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     cases = []
-    for name in args.sets.split(","):
+    for name in args.ext_sets.split(","):
         loci = EXT_SETS[name]
         rows, truth = simulate(out / "sim_ext" / f"n{args.n}_{name}", loci, args.n, seed=args.seed)
         case = run_case(f"ext_n{args.n}_{name}_{len(loci)}loci", rows, loci, args, truth=truth)
@@ -801,6 +801,7 @@ def main() -> int:
     x.add_argument("--n", type=int, default=2000, help="simulated people")
     x.add_argument(
         "--sets",
+        dest="ext_sets",
         default=",".join(EXT_SETS),
         help=f"named locus sets, comma-separated (default: all of {', '.join(EXT_SETS)})",
     )
