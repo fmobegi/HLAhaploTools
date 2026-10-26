@@ -1,21 +1,12 @@
 # HLAhaploTools
 
-HLAhaploTools estimates HLA haplotype frequencies from population and family
-typing data with an expectation–maximisation (EM) algorithm. It has a Rust core,
-a Python API and a command line (`hlahaplotools`).
+HLAhaploTools estimates HLA haplotype frequencies from population and family typing data with an expectation–maximisation (EM) algorithm. It has a Rust core, a Python API and a command line (`hlahaplotools`).
 
-- **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists
-  (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned
-  IPD-IMGT/HLA release.
-- **Any target resolution** per locus: first to fourth field, g, G or P groups,
-  or alleles exactly as typed.
-- **Incomplete typing**: samples with an untyped locus, or with only one allele
-  typed at a locus, are kept in the estimate instead of discarded.
-- **Family data**: Mendel checks, phasing of parents from their children
-  (including untyped parents), estimation from founders only, and checks that
-  flag non-paternity, sample swaps, copied rows, non-siblings and recombinants.
-- **Reproducible**: results are bit-identical on any number of threads, and every
-  run records the IMGT/HLA release, MAC table date and all parameters.
+- **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release.
+- **Any target resolution** per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
+- **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
+- **Family data**: Mendel checks, phasing of parents from their children (including untyped parents), estimation from founders only, and checks that flag non-paternity, sample swaps, copied rows, non-siblings and recombinants.
+- **Reproducible**: results are bit-identical on any number of threads, and every run records the IMGT/HLA release, MAC table date and all parameters.
 
 ## Contents
 
@@ -36,9 +27,7 @@ a Python API and a command line (`hlahaplotools`).
 
 ## Installation
 
-Requirements: Linux, macOS, or Windows with WSL; Python 3.14 or newer;
-[uv](https://docs.astral.sh/uv/); and a Rust toolchain 1.85 or newer
-([rustup](https://rustup.rs/)).
+Requirements: Linux, macOS, or Windows with WSL; Python 3.14 or newer; [uv](https://docs.astral.sh/uv/); and a Rust toolchain 1.85 or newer ([rustup](https://rustup.rs/)).
 
 ```bash
 git clone https://github.com/fmobegi/HLAhaploTools.git
@@ -47,13 +36,11 @@ uv sync                       # builds the Rust extension and installs the packa
 uv run hlahaplotools --version
 ```
 
-The release build uses link-time optimisation, so the first build takes a few
-minutes.
+The release build uses link-time optimisation, so the first build takes a few minutes.
 
 ## Reference data
 
-Typings are resolved against the IPD-IMGT/HLA nomenclature and the NMDP
-multiple-allele-code (MAC) table. Download them once:
+Typings are resolved against the IPD-IMGT/HLA nomenclature and the NMDP multiple-allele-code (MAC) table. Download them once:
 
 ```bash
 uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC table
@@ -68,23 +55,15 @@ This writes `data/`:
 | `mac/alpha.v3.txt` | NMDP multiple-allele codes |
 | `manifest.json` | Release, source URLs, SHA-256 checksums, MAC table date |
 
-The IMGT/HLA release is pinned (`PINNED_RELEASE` in
-[scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently
-3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has
-no release number: it is downloaded once and kept, and its `LAST UPDATED` date is
-recorded; `--refresh-mac` downloads a new copy. Report both with any results.
+The IMGT/HLA release is pinned (`PINNED_RELEASE` in [scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
 
-Commands find `data/` in the current folder, in `$HLAHAPLOTOOLS_DATA`, or with
-`--data-dir`.
+Commands find `data/` in the current folder, in `$HLAHAPLOTOOLS_DATA`, or with `--data-dir`.
 
 ## Quick start
 
 ### Population data
 
-[examples/population/population.dat](examples/population/population.dat) holds
-1,000 simulated people typed at A, C, B, DRB1 and DQB1, drawn from the known
-frequencies in [truth.tsv](examples/population/truth.tsv). DQB1 is untyped in
-about 10% of them, and one C allele is missing in about 5%.
+[examples/population/population.dat](examples/population/population.dat) holds 1,000 simulated people typed at A, C, B, DRB1 and DQB1, drawn from the known frequencies in [truth.tsv](examples/population/truth.tsv). DQB1 is untyped in about 10% of them, and one C allele is missing in about 5%.
 
 ```bash
 uv run hlahaplotools estimate examples/population/population.dat \
@@ -104,8 +83,7 @@ EM: 1000 samples (131 incomplete), 620 genotypes, 13588 candidate haplotypes (49
 Wrote 180 haplotypes to results/population/hfs.dat (details in results/population/run.json)
 ```
 
-The most frequent haplotypes in `results/population/hfs.dat`, with the true
-frequencies used in the simulation:
+The most frequent haplotypes in `results/population/hfs.dat`, with the true frequencies used in the simulation:
 
 | Haplotype (g resolution) | Estimated | True |
 |---|---|---|
@@ -119,8 +97,7 @@ Differences of this size are sampling noise for 1,000 people.
 
 ### Family data
 
-[examples/families/](examples/families) holds two family tables: 9 families,
-40 people, typed at up to 18 loci.
+[examples/families/](examples/families) holds two family tables: 9 families, 40 people, typed at up to 18 loci.
 
 ```bash
 uv run hlahaplotools families examples/families/family_typing_data.csv \
@@ -140,24 +117,17 @@ EM from 6 founders: 264 haplotypes, 1 iterations, converged=True
 ...
 ```
 
-`Family3/C1` does not fit the father at 5 loci. Its typing matches the mother's
-at every locus except A: the mother's row appears to have been copied into the
-child's. Families 1 and 2 are phased completely. Family3 is phased only partly,
-because the flagged child is still included; correct or remove flagged members
-and rerun for clean phasing and estimates.
+`Family3/C1` does not fit the father at 5 loci. Its typing matches the mother's at every locus except A: the mother's row appears to have been copied into the child's. Families 1 and 2 are phased completely. Family3 is phased only partly, because the flagged child is still included; correct or remove flagged members and rerun for clean phasing and estimates.
 
 The other example table, `validated.csv`, has 6 families and no flags.
 
 ## Input formats
 
-Missing typings are always allowed: empty cells, or `-`, `.`, `NA`, `N/A`, `?`.
-A locus with neither allele typed is *untyped*; a locus with one allele typed is
-*half-typed*. Both are used in the estimate (see [Methods](#methods)).
+Missing typings are always allowed: empty cells, or `-`, `.`, `NA`, `N/A`, `?`. A locus with neither allele typed is *untyped*; a locus with one allele typed is *half-typed*. Both are used in the estimate (see [Methods](#methods)).
 
 ### MAC table (`.dat`, `.mac`)
 
-Tab-separated, with a header naming each locus twice. Typings have no locus
-prefix and may be alleles, groups or NMDP multiple-allele codes:
+Tab-separated, with a header naming each locus twice. Typings have no locus prefix and may be alleles, groups or NMDP multiple-allele codes:
 
 ```text
 id	A	A	B	B	DRB1	DRB1
@@ -165,15 +135,11 @@ s1	01:01	24:DXTW	08:01	07:02	03:01	15:01
 s2	02:01	02:01	44:02		04:01	07:01
 ```
 
-`s2` is half-typed at B. Codes such as `01:XX` mean "any allele in family
-A*01". MAC codes need the MAC table, which is found automatically through
-`data/manifest.json` or given with `--mac-codes`.
+`s2` is half-typed at B. Codes such as `01:XX` mean "any allele in family A*01". MAC codes need the MAC table, which is found automatically through `data/manifest.json` or given with `--mac-codes`.
 
 ### GL string table (`.glc`, `.glsc`)
 
-One person per line: an ID, then one GL string per locus in any order,
-separated by whitespace. `|` separates alternative genotypes, `+` the two
-alleles, `/` alternative alleles:
+One person per line: an ID, then one GL string per locus in any order, separated by whitespace. `|` separates alternative genotypes, `+` the two alleles, `/` alternative alleles:
 
 ```text
 1	A*01:01+A*02:01/A*02:02	B*08:01+B*07:02	DRB1*13:01+DRB1*04:01|DRB1*13:02+DRB1*04:04
@@ -196,15 +162,12 @@ fam01,C1,A*01:01,A*03:01,B*08:01,B*35:01,DRB1*03:01,DRB1*04:01
 - Separators: comma, tab or semicolon; quoted fields are allowed.
 - Locus columns: `A_1`, `A.1`, `A1`, `A_ALLELE_1` or `HLA-A_1`.
 - Alleles: `A*01:01`, `*01:01` or `01:01`; `/` for alternatives; MAC codes.
-- Roles: `F`, `Father`, `Dad` / `M`, `Mother`, `Mum` / `C1`, `C2`, `Child3`,
-  `Sib1`, ... Rows without a family ID are used as unrelated people.
-- A `Sample_ID` column, if present, names people; otherwise `family/member`
-  is used (e.g. `Family3/C1`).
+- Roles: `F`, `Father`, `Dad` / `M`, `Mother`, `Mum` / `C1`, `C2`, `Child3`, `Sib1`, ... Rows without a family ID are used as unrelated people.
+- A `Sample_ID` column, if present, names people; otherwise `family/member` is used (e.g. `Family3/C1`).
 
 ## Resolutions
 
-Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION`
-(e.g. `--loci A:g,B:g,DRB1:2f`):
+Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g. `--loci A:g,B:g,DRB1:2f`):
 
 | Code | Target | Example for `A*02:01:01:01` |
 |---|---|---|
@@ -217,10 +180,7 @@ Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION`
 | `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
 | `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
 
-A typing that covers several alleles at the target resolution (e.g. `A*02` at
-`2f`, or a MAC code) contributes to each with equal weight. Expression suffixes
-(N, L, S, Q) are kept. Loci outside the IMGT/HLA tables (e.g. MICA, MICB) can be
-used with `asItIs`.
+A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Loci outside the IMGT/HLA tables (e.g. MICA, MICB) can be used with `asItIs`.
 
 ## Command line
 
@@ -250,11 +210,7 @@ Options for `estimate` and `families`:
 | `--cross-family-duplicates` | off | `families` only: also flag identical people in different families |
 | `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations |
 
-`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`,
-`FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`,
-`LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`,
-`RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`,
-`SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically.
+`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically.
 
 The exit status is 0 on success and 2 if the EM did not converge.
 
@@ -307,68 +263,29 @@ phases = h.phase_families(fam, nom, "2f")  # one FamilyPhase per family
 est, phases = h.estimate_families(fam, nom, "2f")
 ```
 
-`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a
-dict. `read_glsc` reads GL string tables. Passing `mac_codes` as a path loads
-only the codes the input uses; `h.MacCodes(path)` loads the whole table for
-reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
+`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a dict. `read_glsc` reads GL string tables. Passing `mac_codes` as a path loads only the codes the input uses; `h.MacCodes(path)` loads the whole table for reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
 
 ## Methods
 
 ### Typing resolution
 
-Each typed allele, group or MAC code is expanded to full IMGT/HLA allele names
-and mapped to the target resolution. When a typing covers several target codes,
-each receives an equal share of its weight; when a side of a genotype lists
-several candidates (`02:01/02:02`), each candidate receives an equal share; each
-alternative of a GL-string genotype list (`|`) receives weight 1/n. A sample is
-expanded into all combinations of its per-locus genotypes, each weighted by the
-product of these shares. A sample with more than `1/min_genotype_frequency`
-combinations is left out and reported.
+Each typed allele, group or MAC code is expanded to full IMGT/HLA allele names and mapped to the target resolution. When a typing covers several target codes, each receives an equal share of its weight; when a side of a genotype lists several candidates (`02:01/02:02`), each candidate receives an equal share; each alternative of a GL-string genotype list (`|`) receives weight 1/n. A sample is expanded into all combinations of its per-locus genotypes, each weighted by the product of these shares. A sample with more than `1/min_genotype_frequency` combinations is left out and reported.
 
 ### EM algorithm
 
-Haplotype frequencies are estimated by maximum likelihood with the EM
-algorithm. The likelihood of a multi-locus genotype is the sum, over ordered
-haplotype pairs (h, h′) consistent with it, of f(h)·f(h′). The E step computes
-the expected number of copies of each haplotype; the M step divides by twice
-the number of samples. Iteration stops when no frequency changes by more than
-`epsilon`; frequencies below 1e-14 are set to zero. Start values are either
-haplotype occurrence counts over all phase combinations (`numberOccurrence`,
-the default), those counts with up to 10% seeded noise (`perturbation`), equal
-frequencies, or seeded random frequencies.
+Haplotype frequencies are estimated by maximum likelihood with the EM algorithm. The likelihood of a multi-locus genotype is the sum, over ordered haplotype pairs (h, h′) consistent with it, of f(h)·f(h′). The E step computes the expected number of copies of each haplotype; the M step divides by twice the number of samples. Iteration stops when no frequency changes by more than `epsilon`; frequencies below 1e-14 are set to zero. Start values are either haplotype occurrence counts over all phase combinations (`numberOccurrence`, the default), those counts with up to 10% seeded noise (`perturbation`), equal frequencies, or seeded random frequencies.
 
 ### Untyped and half-typed loci
 
-A sample untyped at a locus is consistent with any allele there; a sample typed
-`a+?` requires `a` on at least one of its two haplotypes. Writing
-"a on one of the two" as [h = a] + [h′ = a] − [h = a and h′ = a] and multiplying
-over loci expresses the likelihood as a signed sum of products F(q)·F(q′), where
-q and q′ are haplotype *patterns* with open loci and F(q) is the total frequency
-of the haplotypes matching q. This gives exact E and M steps, which reduce to
-the standard ones for fully typed samples. Candidate haplotypes are those fully
-specified by the data; a pattern that matches none of them is filled in with
-every allele observed at its open loci (at most `max_completions` per pattern).
-The derivation is documented in
-[estimate.rs](crates/hlahaplotools-core/src/estimate.rs).
+A sample untyped at a locus is consistent with any allele there; a sample typed `a+?` requires `a` on at least one of its two haplotypes. Writing "a on one of the two" as [h = a] + [h′ = a] − [h = a and h′ = a] and multiplying over loci expresses the likelihood as a signed sum of products F(q)·F(q′), where q and q′ are haplotype *patterns* with open loci and F(q) is the total frequency of the haplotypes matching q. This gives exact E and M steps, which reduce to the standard ones for fully typed samples. Candidate haplotypes are those fully specified by the data; a pattern that matches none of them is filled in with every allele observed at its open loci (at most `max_completions` per pattern). The derivation is documented in [estimate.rs](crates/hlahaplotools-core/src/estimate.rs).
 
 ### Family phasing
 
-For each family, every way the children could have inherited one haplotype
-from each parent is tried (up to the first 8 children), and the inheritance
-patterns that explain the most loci are kept. At each locus the parental
-alleles consistent with every kept pattern are collected: a parent's alleles
-are assigned to haplotypes where all patterns agree, and left unknown
-(`LOCUS*?`) otherwise. An untyped parent is rebuilt from the children as far as
-they show it; when neither parent is typed, which rebuilt parent is the father
-is arbitrary. Loci no pattern explains are reported as inconsistent (typing
-error or recombination). All comparisons are made at the target resolution.
+For each family, every way the children could have inherited one haplotype from each parent is tried (up to the first 8 children), and the inheritance patterns that explain the most loci are kept. At each locus the parental alleles consistent with every kept pattern are collected: a parent's alleles are assigned to haplotypes where all patterns agree, and left unknown (`LOCUS*?`) otherwise. An untyped parent is rebuilt from the children as far as they show it; when neither parent is typed, which rebuilt parent is the father is arbitrary. Loci no pattern explains are reported as inconsistent (typing error or recombination). All comparisons are made at the target resolution.
 
 ### Estimation from families
 
-Relatives share haplotypes, so only founders (parents, typed or rebuilt) enter
-the estimate. Loci the family phased enter with known phase; other loci use the
-founder's own typing; unknown alleles of a rebuilt parent are treated as
-untyped. A family with no usable founders contributes its first child.
+Relatives share haplotypes, so only founders (parents, typed or rebuilt) enter the estimate. Loci the family phased enter with known phase; other loci use the founder's own typing; unknown alleles of a rebuilt parent are treated as untyped. A family with no usable founders contributes its first child.
 
 ### Pedigree checks
 
@@ -383,32 +300,19 @@ untyped. A family with no usable founders contributes its first child.
 | `inheritance_mismatch` | The inheritance switches several times, or the child lacks alleles an untyped parent must have |
 | `structure` | Unknown member roles, a second father or mother, typings that cannot be resolved |
 
-Each child is compared with haplotypes phased from the rest of its family,
-leaving out members already shown not to belong. Parent–child genotype matches
-also happen naturally (when the other parent carries the same haplotype), so a
-match is only reported when the child also fails to fit the other parent.
-Identical genotypes between unrelated people with common haplotypes are not
-rare, so cross-family duplicates are only reported on request.
+Each child is compared with haplotypes phased from the rest of its family, leaving out members already shown not to belong. Parent–child genotype matches also happen naturally (when the other parent carries the same haplotype), so a match is only reported when the child also fails to fit the other parent. Identical genotypes between unrelated people with common haplotypes are not rare, so cross-family duplicates are only reported on request.
 
 ### Determinism
 
-Work is split into fixed-size chunks that do not depend on the thread count,
-and partial sums are combined in a fixed order, so results are bit-identical on
-any number of threads.
+Work is split into fixed-size chunks that do not depend on the thread count, and partial sums are combined in a fixed order, so results are bit-identical on any number of threads.
 
 ## Validation
 
-All results below are reproducible with the scripts in [scripts/](scripts).
-Simulated populations draw real allele names from IMGT/HLA 3.66.0 and give
-haplotypes skewed (Zipf-like) frequencies. Error is the total variation distance
-between estimated and true haplotype frequencies (0 = identical).
+All results below are reproducible with the scripts in [scripts/](scripts). Simulated populations draw real allele names from IMGT/HLA 3.66.0 and give haplotypes skewed (Zipf-like) frequencies. Error is the total variation distance between estimated and true haplotype frequencies (0 = identical).
 
 ### Incomplete typing
 
-`uv run python scripts/validate_missing.py` — 5,000 people, 5 loci, 300 true
-haplotypes, 3 replicates (mean ± standard deviation). C and DQB1 are left
-untyped at the given rate; "drop incomplete" estimates from fully typed people
-only.
+`uv run python scripts/validate_missing.py` — 5,000 people, 5 loci, 300 true haplotypes, 3 replicates (mean ± standard deviation). C and DQB1 are left untyped at the given rate; "drop incomplete" estimates from fully typed people only.
 
 | C and DQB1 untyped | People left if dropped | Error, all people | Error, drop incomplete | Error, before blanking |
 |---|---|---|---|---|
@@ -416,14 +320,11 @@ only.
 | 20% | 3,219 | 0.051 ± 0.004 | 0.060 ± 0.004 | 0.050 ± 0.003 |
 | 40% | 1,820 | 0.050 ± 0.003 | 0.081 ± 0.002 | 0.046 ± 0.003 |
 
-With 15% of the remaining C and DQB1 typings also half-typed, errors were
-0.049 against 0.065 when dropping (10% untyped) and 0.051 against 0.084 (30%
-untyped). With B, C and DQB1 each 30% untyped: 0.053 against 0.089.
+With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.049 against 0.065 when dropping (10% untyped) and 0.051 against 0.084 (30% untyped). With B, C and DQB1 each 30% untyped: 0.053 against 0.089.
 
 ### Estimation from families
 
-`uv run python scripts/validate_family_estimates.py` — 1,000 families of 1–4
-children per replicate, 10% of parents untyped, DQB1 20% untyped.
+`uv run python scripts/validate_family_estimates.py` — 1,000 families of 1–4 children per replicate, 10% of parents untyped, DQB1 20% untyped.
 
 | Replicate | Founders, family phase | Founders, unphased | Everyone as unrelated |
 |---|---|---|---|
@@ -431,16 +332,11 @@ children per replicate, 10% of parents untyped, DQB1 20% untyped.
 | 2 | 0.078 | 0.083 | 0.085 |
 | 3 | 0.078 | 0.082 | 0.082 |
 
-Treating every family member as unrelated also counts about 4,300 people for
-about 2,000 independent founders, which overstates the precision.
+Treating every family member as unrelated also counts about 4,300 people for about 2,000 independent founders, which overstates the precision.
 
 ### Phasing real pedigrees
 
-`uv run python scripts/validate_pedigrees.py examples/families/*.csv` — the 9
-example families, 18 loci at 2-field resolution. Each family is phased with all
-members as the reference, then again with members left out; called parental
-alleles are compared with the reference. Family3 is excluded from these figures
-because of its copied row.
+`uv run python scripts/validate_pedigrees.py examples/families/*.csv` — the 9 example families, 18 loci at 2-field resolution. Each family is phased with all members as the reference, then again with members left out; called parental alleles are compared with the reference. Family3 is excluded from these figures because of its copied row.
 
 | Scenario | Correct | Wrong | Alleles called |
 |---|---|---|---|
@@ -448,18 +344,11 @@ because of its copied row.
 | One parent left out, 2 children (rebuilt parent) | 708 | 0 | 73.9% |
 | One parent left out, 3 children (rebuilt parent) | 276 | 0 | 96.2% |
 
-Every recovered allele of a rebuilt parent (1,026) is part of that parent's
-actual typing. In the parentage test, all 171 pairings of a child with another
-family's parents fail the Mendel check (2 to 12 inconsistent loci), and 20 of 21
-true children pass; the exception is `Family3/C1`. With 2 children, the
-untransmitted haplotype of a missing parent is often never observed, which
-explains the lower recovery.
+Every recovered allele of a rebuilt parent (1,026) is part of that parent's actual typing. In the parentage test, all 171 pairings of a child with another family's parents fail the Mendel check (2 to 12 inconsistent loci), and 20 of 21 true children pass; the exception is `Family3/C1`. With 2 children, the untransmitted haplotype of a missing parent is often never observed, which explains the lower recovery.
 
 ### Pedigree checks
 
-`uv run python scripts/validate_audit.py --seed 1` (and `--seed 2`) — 2,000
-families of 2–4 children, 6 loci, 15% of parents untyped, with problems planted
-in some children.
+`uv run python scripts/validate_audit.py --seed 1` (and `--seed 2`) — 2,000 families of 2–4 children, 6 loci, 15% of parents untyped, with problems planted in some children.
 
 | Planted problem | Both parents typed | A parent untyped |
 |---|---|---|
@@ -471,19 +360,12 @@ in some children.
 
 ## Limitations
 
-- Phasing does not model recombination; a recombinant child shows up as
-  inconsistent loci (or a `recombination` flag) and those loci stay unphased.
-  Only the first 8 children of a family are used to phase it.
-- An empty DRB3, DRB4 or DRB5 cell is treated as untyped, not as an absent
-  gene.
-- Loci outside the IMGT/HLA tables (H, J, MICA, MICB, ...) must be used with
-  `asItIs`, and their alleles must then be written consistently.
-- Excel files are not read; save them as CSV. GL-string ID (GLID) files are not
-  read.
-- On highly ambiguous data, the EM likelihood can have several nearly equal
-  maxima; results then depend slightly on the start values.
-- With small cohorts, haplotype frequencies and the EM-versus-family comparison
-  are not informative.
+- Phasing does not model recombination; a recombinant child shows up as inconsistent loci (or a `recombination` flag) and those loci stay unphased. Only the first 8 children of a family are used to phase it.
+- An empty DRB3, DRB4 or DRB5 cell is treated as untyped, not as an absent gene.
+- Loci outside the IMGT/HLA tables (H, J, MICA, MICB, ...) must be used with `asItIs`, and their alleles must then be written consistently.
+- Excel files are not read; save them as CSV. GL-string ID (GLID) files are not read.
+- On highly ambiguous data, the EM likelihood can have several nearly equal maxima; results then depend slightly on the start values.
+- With small cohorts, haplotype frequencies and the EM-versus-family comparison are not informative.
 
 ## Development
 
@@ -493,8 +375,7 @@ uv run pytest                           # Python API, command line and data test
 uv run ruff check . && cargo clippy --all-targets
 ```
 
-Tests that need the reference data are skipped until
-`scripts/build_nomenclature.py` has been run.
+Tests that need the reference data are skipped until `scripts/build_nomenclature.py` has been run.
 
 | Path | Contents |
 |---|---|
@@ -510,22 +391,14 @@ Tests that need the reference data are skipped until
 
 ## Citation
 
-If you use HLAhaploTools, please cite this repository, and report the
-IPD-IMGT/HLA release and MAC table date recorded in `run.json`.
+If you use HLAhaploTools, please cite this repository, and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`.
 
 ## License and acknowledgements
 
-HLAhaploTools is released under the GNU General Public License, version 3 or
-later ([LICENSE](LICENSE)).
+HLAhaploTools is released under the GNU General Public License, version 3 or later ([LICENSE](LICENSE)).
 
-Some functions and scripts are ported from
-[Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) by DKMS gGmbH, under the GPL-3.0
-license: typing resolution and the lookup-table build, the EM algorithm, and the
-MAC, GL-string and parameter-file input formats.
+Some functions and scripts are ported from [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) by DKMS gGmbH, under the GPL-3.0 license: typing resolution and the lookup-table build, the EM algorithm, and the MAC, GL-string and parameter-file input formats.
 
-Nomenclature data come from the
-[IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ipd/imgt/hla/), and
-multiple-allele codes from the [NMDP](https://hml.nmdp.org/mac/).
+Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ipd/imgt/hla/), and multiple-allele codes from the [NMDP](https://hml.nmdp.org/mac/).
 
-This repository previously held an R package of the same name; its last version
-is tagged [`r-package-v0.99.0`](https://github.com/fmobegi/HLAhaploTools/tree/r-package-v0.99.0).
+This repository previously held an R package of the same name; its last version is tagged [`r-package-v0.99.0`](https://github.com/fmobegi/HLAhaploTools/tree/r-package-v0.99.0).
