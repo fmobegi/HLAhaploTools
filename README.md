@@ -350,11 +350,11 @@ All results below are reproducible with the scripts in [scripts/](scripts). Simu
 
 | C and DQB1 untyped | People left if dropped | Error, all people | Error, drop incomplete | Error, before blanking |
 | ------------------ | ---------------------- | ----------------- | ---------------------- | ---------------------- |
-| 5%                 | 4,516                  | 0.049 ± 0.001    | 0.052 ± 0.001         | 0.049 ± 0.001         |
-| 20%                | 3,219                  | 0.051 ± 0.004    | 0.060 ± 0.004         | 0.050 ± 0.003         |
-| 40%                | 1,820                  | 0.050 ± 0.003    | 0.081 ± 0.002         | 0.046 ± 0.003         |
+| 5%                 | 4,502                  | 0.049 ± 0.002    | 0.052 ± 0.003         | 0.049 ± 0.002         |
+| 20%                | 3,188                  | 0.049 ± 0.001    | 0.062 ± 0.003         | 0.049 ± 0.001         |
+| 40%                | 1,820                  | 0.057 ± 0.005    | 0.086 ± 0.008         | 0.053 ± 0.005         |
 
-With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.049 against 0.065 when dropping (10% untyped) and 0.051 against 0.084 (30% untyped). With B, C and DQB1 each 30% untyped: 0.053 against 0.089.
+With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.048 against 0.062 when dropping (10% untyped) and 0.054 against 0.082 (30% untyped). With B, C and DQB1 each 30% untyped: 0.054 against 0.087.
 
 ### Estimation from families
 
