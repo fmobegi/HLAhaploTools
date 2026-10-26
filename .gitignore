@@ -1,22 +1,24 @@
-*.Rproj.user
-*.Rproj
-*.Rprofile
-*.Renviron
-*.bk
-*.txt
-*.tsv
-*.xlsx
-*.xls
-*.Rhistory
-*.Rdata
-*.httr-oauth
-*.DS_Store
-*.quarto
-*.vscode*
-*.lintr
-inst/doc
-#inst/extdata
-/doc/
-/Meta/
-.Rproj.user
-Rbuildignore
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Rust build output, and the compiled extension maturin places in the package
+/target
+*.so
+*.pyd
+
+# Original Hapl-o-Mat clone (C++ reference) and downloaded nomenclature data
+/reference/
+/data/
+
+# Default output folder of `hlahaplotools estimate`, and tool caches
+/results/
+.ruff_cache/
+.pytest_cache/

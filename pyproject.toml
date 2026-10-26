@@ -1,0 +1,45 @@
+[project]
+name = "hlahaplotools"
+version = "0.1.0"
+description = "HLA haplotype frequency estimation: a fast Rust port of Hapl-o-Mat with handling of untyped and half-typed loci"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = []
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Fredrick M. Mobegi" }]
+
+[project.urls]
+Repository = "https://github.com/fmobegi/HLAhaploTools"
+
+[project.scripts]
+hlahaplotools = "hlahaplotools:main"
+
+[tool.maturin]
+module-name = "hlahaplotools._core"
+python-packages = ["hlahaplotools"]
+python-source = "src"
+
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "src/**/*.rs" }, { file = "crates/**/*.rs" }, { file = "crates/**/Cargo.toml" }, { file = "Cargo.toml" }, { file = "Cargo.lock" }]
+
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.17.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+extend-exclude = ["reference"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = ["E731", "E741"]
