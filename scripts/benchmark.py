@@ -463,7 +463,8 @@ def cmd_run(args) -> int:
     if args.real:
         manifest = json.loads((ROOT / "data" / "manifest.json").read_text())
         nom = h.Nomenclature(str(ROOT / "data" / "derived" / manifest["imgthla"]["release"]))
-        for loci in REAL_SETS:
+        sets = [s.split("~") for s in args.real_sets.split(",")] if args.real_sets else REAL_SETS
+        for loci in sets:
             rows, info = prepare_real(Path(args.real), loci, args.resolution, nom, args.real_n, args.seed)
             name = f"real_{args.resolution}_{'_'.join(loci)}_n{len(rows)}"
             cases.append(run_case(name, rows, loci, args, info=info))
@@ -512,30 +513,43 @@ def cmd_rescore_pypop(args) -> int:
 
 # ------------------------------------------------------------------ extended loci
 
-# Classical loci first, then MIC and the other loci added in order.
-EXT_LOCI = ["A", "C", "B", "DRB1", "DQB1", "DPB1", "MICA", "MICB", "DQA1", "DPA1", "E", "F", "G", "H", "J"]
+# The eight classical loci routinely typed (with DRB3/4/5, the 11 routine loci), then MIC and the
+# non-classical loci. Cumulative sets build up in this order; class I and class II are also tested alone.
+CLASSICAL8 = ["A", "B", "C", "DRB1", "DQB1", "DPB1", "DQA1", "DPA1"]
+EXT_SETS = {
+    "classical6": CLASSICAL8[:6],
+    "classical8": CLASSICAL8,
+    "classical8_mic": CLASSICAL8 + ["MICA", "MICB"],
+    "extended15": CLASSICAL8 + ["MICA", "MICB", "E", "F", "G", "H", "J"],
+    "class1": ["A", "B", "C"],
+    "class1_extended": ["A", "B", "C", "MICA", "MICB", "E", "F", "G", "H", "J"],
+    "class2": ["DRB1", "DQA1", "DQB1", "DPA1", "DPB1"],
+}
 
 
 def cmd_extended(args) -> int:
     """Haplotypes over more loci (MICA, MICB, E, F, G, H, J): accuracy, fit, cost.
 
-    1. Fully typed populations at an increasing number of loci; every tool.
+    1. Fully typed populations for each named locus set (cumulative: 6 and 8
+       classical loci, + MICA/MICB, + E/F/G/H/J; and class I and class II alone);
+       every tool.
     2. MICA and MICB untyped in some people (as when MIC typing is added to a
-       cohort later): hlahaplotools on everyone against every tool on the fully
-       typed people only, all scored against the true frequencies.
+       cohort later), on the 8 classical loci + MIC: hlahaplotools on everyone
+       against every tool on the fully typed people only, scored against the truth.
     """
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     cases = []
-    sizes = [int(k) for k in args.loci_counts.split(",")]
-    for k in sizes:
-        loci = EXT_LOCI[:k]
-        rows, truth = simulate(out / "sim_ext" / f"n{args.n}_l{k}", loci, args.n, seed=args.seed)
-        cases.append(run_case(f"ext_n{args.n}_{k}loci", rows, loci, args, truth=truth))
+    for name in args.sets.split(","):
+        loci = EXT_SETS[name]
+        rows, truth = simulate(out / "sim_ext" / f"n{args.n}_{name}", loci, args.n, seed=args.seed)
+        case = run_case(f"ext_n{args.n}_{name}_{len(loci)}loci", rows, loci, args, truth=truth)
+        case["set"] = name
+        cases.append(case)
 
-    # Incomplete MIC typing.
-    k = max(s for s in sizes if s >= 8) if any(s >= 8 for s in sizes) else 8
-    loci = EXT_LOCI[:k]
+    # Incomplete MIC typing, on the 8 classical loci + MICA and MICB.
+    loci = EXT_SETS["classical8_mic"]
+    k = len(loci)
     sim = out / "sim_ext" / f"n{args.n}_l{k}_mic_missing"
     sim.mkdir(parents=True, exist_ok=True)
     rate = args.mic_missing
@@ -770,6 +784,7 @@ def main() -> int:
     common(r)
     r.add_argument("--sizes", default="1000,5000", help="simulated population sizes")
     r.add_argument("--real-n", type=int, default=5000, help="people sampled from the real data (PyPop allows 5000)")
+    r.add_argument("--real-sets", help="real-data locus sets instead of the default list, e.g. A~B~C,DRB1~DQB1")
     r.add_argument("--threads", default="1,8", help="hlahaplotools thread counts to time")
     r.add_argument("--epsilon", type=float, default=1e-6, help="stopping rule for hlahaplotools and Hapl-o-Mat")
     r.add_argument("--starts", type=int, default=10, help="starts for the multi-start hlahaplotools row")
@@ -784,7 +799,11 @@ def main() -> int:
     x.add_argument("--out", default="bench/results")
     x.add_argument("--seed", type=int, default=1)
     x.add_argument("--n", type=int, default=2000, help="simulated people")
-    x.add_argument("--loci-counts", default="6,9,12,15", help="numbers of loci (first k of the extended list)")
+    x.add_argument(
+        "--sets",
+        default=",".join(EXT_SETS),
+        help=f"named locus sets, comma-separated (default: all of {', '.join(EXT_SETS)})",
+    )
     x.add_argument("--mic-missing", type=float, default=0.3, help="share of people with MICA and MICB untyped")
     x.add_argument("--threads", default="8")
     x.add_argument("--starts", type=int, default=10)
