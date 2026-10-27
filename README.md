@@ -31,8 +31,8 @@ HLAhaploTools estimates HLA haplotype frequencies from population and family typ
 - [Limitations](#limitations)
 - [Development](#development)
 - [Citation](#citation)
-- [Use of artificial intelligence](#use-of-artificial-intelligence)
 - [License and acknowledgements](#license-and-acknowledgements)
+- [Use of artificial intelligence](#use-of-artificial-intelligence)
 
 ## Installation
 
@@ -473,10 +473,6 @@ Tests that need the reference data are skipped until `scripts/build_nomenclature
 
 If you use HLAhaploTools, please cite this [repository](https://github.com/fmobegi/HLAhaploTools), and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`.
 Please, also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and other data preprocessing methods used in HLAhaploTools.
-
-## Use of artificial intelligence
-
-This repository has been developed with the assistance of AI tools, including GitHub Copilot and Anthropic's Claude Sonnet 5.5 and Claude Opus 5.5. These tools were used to generate code snippets, documentation and other content. All code and documentation have been reviewed and tested by the developers to ensure accuracy, functionality and compliance with project standards.
 
 ## License and acknowledgements
 
