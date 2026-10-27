@@ -477,9 +477,7 @@ Please, also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/article
 
 HLAhaploTools is released under the GNU General Public License, version 3 or later ([LICENSE](LICENSE)).
 
-HLAhaploTools reimplements, in new Rust and Python code, some methods of [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) (DKMS gGmbH, GPL-3.0): typing resolution and the lookup-table build, the EM algorithm, and its MAC, GL string, GLS and parameter-file input formats. Their rules follow Hapl-o-Mat's so that the logic and results agree. The HML and NGSengine readers follow the R functions `process_typing_hml()` and `process_typing_xml()` of the IHIWSImmunogenicity package, but keep the full ambiguity of each typing instead of its first option.
-
-Related tools from NMDP Bioinformatics complement HLAhaploTools; no code is taken from them. [py-ard](https://github.com/nmdp-bioinformatics/py-ard) reduces typings to antigen-recognition-domain (ARD) groups and serological equivalents, and [py-graph-imputation](https://github.com/nmdp-bioinformatics/py-graph-imputation), the successor of GRIMM, imputes individual genotypes from haplotype frequencies such as those HLAhaploTools estimates.
+HLAhaploTools reimplements, in new Rust and Python code, some methods of [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) (DKMS gGmbH, GPL-3.0): typing resolution and the lookup-table build, the EM algorithm, and its MAC, GL string, GLS and parameter-file input formats. Their rules follow Hapl-o-Mat's so that the logic and results agree.
 
 Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ipd/imgt/hla/), and multiple-allele codes from the [NMDP](https://hml.nmdp.org/mac/).
 
