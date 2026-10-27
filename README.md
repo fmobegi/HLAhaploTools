@@ -2,9 +2,11 @@
 
 HLAhaploTools estimates HLA haplotype frequencies from population and family typing data with an expectation–maximisation (EM) algorithm. It has a Rust core, a Python API and a command line (`hlahaplotools`).
 
+> **Research use only.** HLAhaploTools is research software. It is not a medical device and has not been validated for clinical use: do not use it, or its haplotype assignments, pedigree checks or frequencies, to make decisions about patient care, donor selection or transplantation. Results are statistical estimates and can be wrong. It is provided without warranty of any kind (see [LICENSE](LICENSE)).
+
 ## Key strengths
 
-- **Laboratory reports as input**: MAC and GL string tables, Hapl-o-Mat's GLS pull and GLID files, NMDP HML files, and GenDx NGSengine XML exports, read with all their ambiguity.
+- **Laboratory reports as input**: MAC and GL string tables, GL identifier (GLS) pull and GLID files, NMDP HML files, and GenDx NGSengine XML exports, read with all their ambiguity.
 - **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release.
 - **Any target resolution**: per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
 - **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
@@ -17,6 +19,7 @@ HLAhaploTools estimates HLA haplotype frequencies from population and family typ
 - [Installation](#installation)
 - [Reference data](#reference-data)
 - [Quick start](#quick-start)
+- [Recommended workflow](#recommended-workflow)
 - [Input formats](#input-formats)
 - [Resolutions](#resolutions)
 - [Command line](#command-line)
@@ -52,12 +55,12 @@ uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC t
 
 This writes `data/`:
 
-| Path | Contents |
+| Path                   | Contents                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt` |
+| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt`       |
 | `derived/<release>/` | Lookup tables used for resolution: `AllAllelesExpanded.txt`, `LargeG.txt`, `P.txt`, `Smallg.txt` |
-| `mac/alpha.v3.txt` | NMDP multiple-allele codes |
-| `manifest.json` | Release, source URLs, SHA-256 checksums, MAC table date |
+| `mac/alpha.v3.txt`   | NMDP multiple-allele codes                                                                               |
+| `manifest.json`      | Release, source URLs, SHA-256 checksums, MAC table date                                                  |
 
 The IMGT/HLA release is pinned (`PINNED_RELEASE` in [scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
 
@@ -67,69 +70,66 @@ Commands find `data/` in the current folder, in `$HLAHAPLOTOOLS_DATA`, or with `
 
 ### Population data
 
-[examples/population/population.dat](examples/population/population.dat) holds 1,000 simulated people typed at A, C, B, DRB1 and DQB1, drawn from the known frequencies in [truth.tsv](examples/population/truth.tsv). DQB1 is untyped in about 10% of them. Homozygous loci are written with the second allele blank, as laboratories commonly report them; the blank is filled with the typed allele.
-
 ```bash
-uv run hlahaplotools estimate examples/population/population.dat \
-    --loci A:g,C:g,B:g,DRB1:g,DQB1:g -o results/population
+uv run hlahaplotools estimate INPUT --loci A:g,C:g,B:g,DRB1:g,DQB1:g -o results/population
 ```
 
-Expected output:
+`INPUT` is a typing file in any of the [input formats](#input-formats). The screen reports how many people were read, what was filled in at each locus, how many people are untyped or half-typed at each locus, whether the EM starts agreed, and where the results were written:
 
 ```text
-Read 1000 samples from examples/population/population.dat (MAC); 0 lines unreadable
-  filled at A: 124 single alleles copied (homozygous)
-  filled at C: 133 single alleles copied (homozygous)
-  filled at B: 128 single alleles copied (homozygous)
-  filled at DRB1: 158 single alleles copied (homozygous)
-  filled at DQB1: 155 single alleles copied (homozygous)
-  A      -> g      untyped:      0  one allele typed:      0
-  C      -> g      untyped:      0  one allele typed:      0
-  B      -> g      untyped:      0  one allele typed:      0
-  DRB1   -> g      untyped:      0  one allele typed:      0
-  DQB1   -> g      untyped:     92  one allele typed:      0
-Starts: 10; all reached the same fit (logL within 0.01 of -7085.814726)
-EM: 1000 samples (92 incomplete), 625 genotypes, 13373 candidate haplotypes (4014 filled in), 15 iterations, converged=True, logL=-7085.814726
-Wrote 205 haplotypes to results/population/hfs.dat (details in results/population/run.json)
+results/population/
+├── hfs.dat       haplotype frequencies, most frequent first
+├── epsilon.dat   EM convergence, one line per iteration
+└── run.json      what was run: input, loci, reference data versions, parameters, people used and left out
 ```
 
-The most frequent haplotypes in `results/population/hfs.dat`, with the true frequencies used in the simulation:
+Each line of `hfs.dat` is one haplotype, its alleles joined by `~` in the order of `--loci`, then a tab and its frequency:
 
-| Haplotype (g resolution) | Estimated | True |
-| ------------------------------------------------------ | --------- | ------ |
-| `A*02:1192~C*08:150~B*53:31~DRB1*08:81~DQB1*05:66` | 0.2045 | 0.2128 |
-| `A*11:81~C*03:03g~B*35:61~DRB1*13:165~DQB1*04:24` | 0.1045 | 0.0993 |
-| `A*32:136~C*15:05g~B*52:82~DRB1*04:231~DQB1*05:01g` | 0.0720 | 0.0636 |
-| `A*02:313~C*07:1118~B*14:55~DRB1*14:95~DQB1*03:122` | 0.0445 | 0.0463 |
-| `A*32:21~C*03:04g~B*44:02g~DRB1*14:04g~DQB1*04:24` | 0.0285 | 0.0297 |
-
-Differences of this size are sampling noise for 1,000 people.
+```text
+A*01:01~C*07:01~B*08:01~DRB1*03:01~DQB1*02:01	0.0712
+```
 
 ### Family data
 
-[examples/families/](examples/families) holds two family tables: 9 families, 40 people, typed at up to 18 loci.
-
 ```bash
-uv run hlahaplotools families examples/families/family_typing_data.csv \
-    --loci A:2f,C:2f,B:2f,DRB1:2f,DQA1:2f,DQB1:2f,DPA1:2f,DPB1:2f -o results/families
+uv run hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families
 ```
 
-Expected output:
+`FAMILY_TABLE` has one row per person, with family and member columns (see [Family table](#family-table-csv-tsv)). The results:
 
 ```text
-Read 14 people in 3 families (0 unrelated); 0 rows or members left out
-Mendel check: 6 problems (mendel.tsv)
-Pedigree checks: 2 flags (flags.tsv): {'parent_excluded': 1, 'trio_inconsistent': 1}
-  parent_excluded: Family3/C1: shares no allele with the father at 5 of 8 loci compared: not the biological father, or a sample swap (...)
-  trio_inconsistent: Family3/C1: each parent fits alone but not both together at 1 loci: typing error, null allele or mutation (...)
-Phasing: 2 complete, 1 partial, 0 failed
-EM from 6 founders: 264 haplotypes, 1 iterations, converged=True
-...
+results/families/
+├── flags.tsv        possible pedigree problems (non-paternity, sample swaps, copied rows, recombinants)
+├── mendel.tsv       typings a child cannot have inherited from its parents
+├── phases.tsv       each family's four parental haplotypes (A, B from the father; C, D from the mother)
+├── children.tsv     which haplotypes each child inherited
+├── hfs.dat          haplotype frequencies estimated from the founders (parents) only
+├── diplotypes.tsv   most likely haplotype pair of each founder
+├── comparison.json  population-style estimate compared with the family phasing
+└── run.json         as for estimate
 ```
 
-`Family3/C1` does not fit the father at 5 loci. Its typing matches the mother's at every locus except A: the mother's row appears to have been copied into the child's. Families 1 and 2 are phased completely. Family3 is phased only partly, because the flagged child is still included; correct or remove flagged members and rerun for clean phasing and estimates.
+Check `flags.tsv` first: correct or remove flagged people and rerun. Every file is described under [Output files](#output-files).
 
-The other example table, `validated.csv`, has 6 families and no flags.
+## Recommended workflow
+
+1. **Look at the input first.** `hlahaplotools summary INPUT` reads the file without estimating anything: how many people were read, which lines could not be read and why, how many people are untyped or half-typed at each locus, and what the reporting conventions filled in. Fix unreadable lines before going further; anyone left out of the estimate is listed in `run.json`.
+2. **Update retired allele names.** Typings reported years ago may use names IPD-IMGT/HLA has since changed (e.g. `C*04:09N`, now `C*04:09L`). `hlahaplotools rename INPUT OUTPUT` writes a corrected copy and a table of every change; without it, people with a retired name are left out.
+3. **Choose the loci and resolution.** Two-field resolution (`2f`) suits most work; use `g` or `G` when typings mix depths and you want them grouped. A typing coarser than the target (e.g. `A*02` at `2f`) is spread over all the alleles it covers, which costs time and adds uncertainty. Every extra locus multiplies the number of possible haplotypes, so start with the loci you need.
+4. **Check the reporting conventions.** By default a blank second allele means homozygous and blank DRB3/4/5 cells are filled from DRB1. If your laboratory leaves a second allele blank because it was not typed, add `--half-typed unknown`.
+5. **Run with the defaults.** Ten EM starts and linked completion of untyped loci are the defaults for good reason; the screen says whether the starts agreed. If they did not, the best fit is kept and the spread is recorded in `run.json`.
+6. **Report the run.** Quote the IPD-IMGT/HLA release and MAC table date from `run.json`, together with the loci, resolution and number of people used. Rare haplotypes, below about 1 in 1,000, are uncertain at any cohort size typical of HLA studies (see [Validation](#validation)).
+
+**Run time and memory.** Measured on a laptop (4 cores, 16 GB) for a cohort of 15,633 people typed at mixed depth with DQA1 and DPA1 untyped in about 30%, at two-field resolution with ten starts:
+
+| Loci | People incomplete | Candidate haplotypes | Time | Peak memory |
+| ---- | ----------------- | -------------------- | ---- | ----------- |
+| 5 (A, B, C, DRB1, DQB1) | 217 | 0.26 million | 13 s | 0.3 GB |
+| 6 (+ DPB1) | 403 | 0.7 million | 46 s | 0.6 GB |
+| 8 (+ DQA1, DPA1) | 4,760 | 4.7 million | 2.5 min | 1.8 GB |
+| 11 (+ DRB3, DRB4, DRB5) | 4,831 | 16 million | 8 min | 6.1 GB |
+
+Memory grows with the number of candidate haplotypes, which grows with the loci and with how many people are untyped at several of them. Family analyses of a few hundred families take seconds to minutes.
 
 ## Input formats
 
@@ -154,18 +154,18 @@ s2 02:01 02:01 44:02  04:01 07:01
 
 ### GL string table (`.glc`, `.glsc`)
 
-One person per line: an ID, then one GL string per locus in any order, separated by whitespace. `|` separates alternative genotypes, `+` the two alleles, `/` alternative alleles:
+One person per line: an ID, then the person's [GL String](https://pmc.ncbi.nlm.nih.gov/articles/PMC10524834/) (Genotype List String 1.1). In the grammar, `^` separates loci, `|` alternative genotypes, `+` the two copies at a locus, and `/` alternative alleles:
 
 ```text
-1 A*01:01+A*02:01/A*02:02 B*08:01+B*07:02 DRB1*13:01+DRB1*04:01|DRB1*13:02+DRB1*04:04
-2 A*03:01+ DRB1*15:01+DRB1*15:01
+1 A*01:01+A*02:01/A*02:02^B*08:01+B*07:02^DRB1*13:01+DRB1*04:01|DRB1*13:02+DRB1*04:04
+2 A*03:01+A*03:01^DRB1*15:01+DRB1*15:01
 ```
 
-A locus left out of a line is untyped (`2` has no B); `A*03:01+` has one allele typed and is read as homozygous. A locus written without `+` (`DRB4*01:01:01G`, or `DRB3*01:01|DRB3*01:02`) is one allele typed, as laboratories often report DRB3/4/5. `HLA-` prefixes are accepted, and `^` may join several loci in one string.
+Person 1 has `A*01:01` and either `A*02:01` or `A*02:02` (`/` binds more tightly than `+`), and at DRB1 either `13:01+04:01` or `13:02+04:04` (two alternative genotypes, `|`). A locus left out is untyped (`2` has no B). The `HLA-` prefix is optional, and the loci may also be separated by whitespace instead of `^` (the layout of Hapl-o-Mat's GLSC files), e.g. `2 A*03:01+A*03:01 DRB1*15:01+DRB1*15:01`. Two shorthands that are not part of the GL String grammar are accepted for typing reports: `A*03:01+`, with the second copy empty, is one allele typed and is read as homozygous; and a locus written without `+` (`DRB4*01:01:01G`, or `DRB3*01:01|DRB3*01:02`) is one allele typed, as laboratories often report DRB3/4/5. Phased haplotypes (`~`) and possible gene locations (`?`) are not read.
 
 ### GLS: pull and GLID files (`.pull`, `.glid`)
 
-Hapl-o-Mat's GLS input, as used by registries and laboratories that report through GL IDs. The GLID file numbers each locus GL string; the pull file lists, per person, one GL ID per locus:
+Used by registries and laboratories that report through GL identifiers. The GLID file numbers each locus GL string; the pull file lists, per person, one GL ID per locus:
 
 ```text
 populationData.glid          populationData.pull
@@ -174,7 +174,7 @@ populationData.glid          populationData.pull
 3;A*03:01+A*11:01
 ```
 
-GL ID `0` means the locus was not typed; the person is kept with that locus untyped (Hapl-o-Mat drops them). Each GL string names its locus, so Hapl-o-Mat's `LOCIORDER` is not needed. The GLID file is found beside the pull file (same name, `.glid`), or given with `--glid`.
+GL ID `0` means the locus was not typed; the person is kept with that locus untyped. The GLID file is found beside the pull file (same name, `.glid`), or given with `--glid`.
 
 ### HML (`.hml`)
 
@@ -201,22 +201,22 @@ fam01,C1,A*01:01,A*03:01,B*08:01,B*35:01,DRB1*03:01,DRB1*04:01
 - Locus columns: `A_1`, `A.1`, `A1`, `A_ALLELE_1` or `HLA-A_1`.
 - Alleles: `A*01:01`, `*01:01` or `01:01`; `/` for alternatives; MAC codes.
 - Roles: `F`, `Father`, `Dad` / `M`, `Mother`, `Mum` / `C1`, `C2`, `Child3`, `Sib1`, ... Rows without a family ID are used as unrelated people.
-- A `Sample_ID` column, if present, names people; otherwise `family/member` is used (e.g. `Family3/C1`).
+- A `Sample_ID` column, if present, names people; otherwise `family/member` is used (e.g. `fam01/C1`).
 
 ## Resolutions
 
 Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g. `--loci A:g,B:g,DRB1:2f`):
 
-| Code | Target | Example for `A*02:01:01:01` |
+| Code       | Target                                                          | Example for `A*02:01:01:01` |
 | ---------- | --------------------------------------------------------------- | ----------------------------- |
-| `1f` | First field | `A*02` |
-| `2f` | Two fields | `A*02:01` |
-| `3f` | Three fields | `A*02:01:01` |
-| `4f` | Four fields | `A*02:01:01:01` |
-| `g` | g group (identical antigen-recognition domains, nulls included) | `A*02:01g` |
-| `G` | G group (identical exons 2 and 3, or 2 for class II) | `A*02:01:01G` |
-| `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
-| `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
+| `1f`     | First field                                                     | `A*02`                      |
+| `2f`     | Two fields                                                      | `A*02:01`                   |
+| `3f`     | Three fields                                                    | `A*02:01:01`                |
+| `4f`     | Four fields                                                     | `A*02:01:01:01`             |
+| `g`      | g group (identical antigen-recognition domains, nulls included) | `A*02:01g`                  |
+| `G`      | G group (identical exons 2 and 3, or 2 for class II)            | `A*02:01:01G`               |
+| `P`      | P group (identical protein in the antigen-recognition domains)  | `A*02:01P`                  |
+| `asItIs` | Typings used exactly as written, without lookup                 | `A*02:01:01:01`             |
 
 A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Every locus in the IPD-IMGT/HLA allele list can be resolved, including MICA, MICB and the non-classical and pseudogene loci (E, F, G, H, J, K, L, DQA2, TAP1, ...), so haplotypes can extend beyond the classical loci. IMGT/HLA defines G and P groups only for the classical and E/F/G-type loci; for the others, use `1f` to `4f` or `g` (the 2-field name). Loci not in the list at all can still be used with `asItIs`.
 
@@ -232,30 +232,30 @@ uv run hlahaplotools rename    INPUT OUTPUT                            # update 
 
 Options for `estimate` and `families`:
 
-| Option                                              | Default                     | Meaning                                                                     |
-| --------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------- |
-| `--loci`                                          | required                    | Loci and resolutions, e.g. `A:g,C:g,B:g,DRB1:g`                           |
-| `-o`, `--output`                                | `results`                 | Output folder                                                               |
-| `--format`                                        | from extension or content   | `mac`, `glsc`, `gls`, `hml` or `ngsengine` (`estimate` and `summary`) |
-| `--glid`                                          | pull file with `.glid`      | GLS input: the GLID file                                                    |
-| `--include-unapproved`                            | off                         | NGSengine input: also read locus results not approved in review             |
-| `--epsilon`                                       | `1e-6`                    | Stop when no haplotype frequency changes by more than this                  |
-| `--init`                                          | `numberOccurrence`        | Start values: `numberOccurrence`, `perturbation`, `equal`, `random` |
-| `--seed`                                          | `0`                       | Seed for `perturbation` and `random`                                    |
-| `--starts`                                        | `10`                      | EM start values: `--init` first, then perturbed starts; the best fit is kept (`estimate` only) |
-| `--cut`                                           | `1e-6`                    | Leave out haplotypes at or below this frequency in `hfs.dat`              |
-| `--no-renormalize`                                | off                         | Do not rescale the kept frequencies to sum to 1                             |
-| `--min-genotype-frequency`                        | `1e-5`                    | Leave out a sample whose typing allows more than 1/this genotypes           |
-| `--max-completions`                               | `10000`                   | Most haplotypes created to fill in one partly typed pattern                 |
+| Option                                              | Default                     | Meaning                                                                                                                               |
+| --------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `--loci`                                          | required                    | Loci and resolutions, e.g. `A:g,C:g,B:g,DRB1:g`                                                                                     |
+| `-o`, `--output`                                | `results`                 | Output folder                                                                                                                         |
+| `--format`                                        | from extension or content   | `mac`, `glsc`, `gls`, `hml` or `ngsengine` (`estimate` and `summary`)                                                   |
+| `--glid`                                          | pull file with `.glid`    | GLS input: the GLID file                                                                                                              |
+| `--include-unapproved`                            | off                         | NGSengine input: also read locus results not approved in review                                                                       |
+| `--epsilon`                                       | `1e-6`                    | Stop when no haplotype frequency changes by more than this                                                                            |
+| `--init`                                          | `numberOccurrence`        | Start values: `numberOccurrence`, `perturbation`, `equal`, `random`                                                           |
+| `--seed`                                          | `0`                       | Seed for `perturbation` and `random`                                                                                              |
+| `--starts`                                        | `10`                      | EM start values: `--init` first, then perturbed starts; the best fit is kept (`estimate` only)                                    |
+| `--cut`                                           | `1e-6`                    | Leave out haplotypes at or below this frequency in `hfs.dat`                                                                        |
+| `--no-renormalize`                                | off                         | Do not rescale the kept frequencies to sum to 1                                                                                       |
+| `--min-genotype-frequency`                        | `1e-5`                    | Leave out a sample whose typing allows more than 1/this genotypes                                                                     |
+| `--max-completions`                               | `10000`                   | Most haplotypes created to fill in one partly typed pattern                                                                           |
 | `--completion`                                    | `linked`                  | How untyped loci are filled in: `linked` (alleles that go with the most strongly linked typed locus) or `all` (every combination) |
-| `--threads`                                       | all cores                   | Worker threads; results do not depend on it                                 |
-| `--half-typed`                                    | `homozygous`              | One allele typed, the other blank: `homozygous` (copy it) or `unknown`  |
-| `--no-drb345`                                     | off                         | Do not fill DRB3/4/5 from DRB1                                              |
-| `--no-family-phase`                               | off                         | `families` only: estimate from founders as unrelated people               |
-| `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families         |
-| `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                    |
+| `--threads`                                       | all cores                   | Worker threads; results do not depend on it                                                                                           |
+| `--half-typed`                                    | `homozygous`              | One allele typed, the other blank: `homozygous` (copy it) or `unknown`                                                            |
+| `--no-drb345`                                     | off                         | Do not fill DRB3/4/5 from DRB1                                                                                                        |
+| `--no-family-phase`                               | off                         | `families` only: estimate from founders as unrelated people                                                                         |
+| `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families                                                                   |
+| `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                                                                              |
 
-`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`; for GLS, `FILENAME_PULL` and `FILENAME_GLID` instead of `FILENAME_INPUT`). Loci are then ordered alphabetically, and the EM runs from a single start, as Hapl-o-Mat does. Hapl-o-Mat options that are not implemented (`DO_AMBIGUITYFILTER`, `WRITE_GENOTYPES`, `DO_ANALYTICS`) are ignored with a warning; `LOCIORDER` and `RESOLVE_MISSING_GENOTYPES` are not needed, since GL strings name their locus and untyped loci are always kept. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
+`haplomat` runs from an existing Hapl-o-Mat parameter file, with a single EM start, so earlier analyses can be repeated unchanged; options it does not implement are ignored with a warning.
 
 `rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
@@ -265,10 +265,10 @@ The exit status is 0 on success and 2 if the EM did not converge.
 
 ### `estimate`
 
-| File            | Contents                                                                                                                                                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `hfs.dat`     | `haplotype<TAB>frequency`, most frequent first. Alleles are joined with `~` in the order given by `--loci`.                                                                                                                             |
-| `epsilon.dat` | One line per iteration: largest frequency change, log-likelihood                                                                                                                                                                              |
+| File            | Contents                                                                                                                                                                                                                                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `hfs.dat`     | `haplotype<TAB>frequency`, most frequent first. Alleles are joined with `~` in the order given by `--loci`.                                                                                                                                                                                                                                                          |
+| `epsilon.dat` | One line per iteration: largest frequency change, log-likelihood                                                                                                                                                                                                                                                                                                           |
 | `run.json`    | Tool version, input, loci and resolutions, IMGT/HLA release, MAC table date, all parameters, how blank alleles were filled (rules and counts per locus), numbers of samples read, used and incomplete, iterations, log-likelihood, timings, and every unreadable line, locus result left untyped while reading (`loci_left_untyped`) and left-out sample with the reason |
 
 ### `families`
@@ -292,11 +292,11 @@ import hlahaplotools as h
 nom = h.Nomenclature("data/derived/3.66.0")
 
 # Population data
-ds = h.read_mac("examples/population/population.dat", mac_codes="data/mac/alpha.v3.txt")
-ds.sample(3)  # {'A': 'A*02:1192+A*02:1192', ...}  (written with the second allele blank)
-ds.fill_counts()  # {'A': {'homozygous': 124, 'absent_gene': 0, ...}, ...}
-ds.missing_counts()  # untyped samples per locus
-h.read_mac("examples/population/population.dat", half_typed="unknown")  # keep blanks unknown
+ds = h.read_mac("population.dat", mac_codes="data/mac/alpha.v3.txt")
+ds.sample(0)  # one person: {locus: GL string, or None if untyped}
+ds.fill_counts()  # what was filled in at each locus: {locus: {"homozygous": n, "absent_gene": n, ...}}
+ds.missing_counts()  # untyped people per locus
+h.read_mac("population.dat", half_typed="unknown")  # keep a blank second allele unknown
 est = h.estimate(ds, nom, {"A": "g", "C": "g", "B": "g", "DRB1": "g", "DQB1": "g"}, epsilon=1e-6)
 est, starts = h.estimate_multistart(ds, nom, "g", starts=10)  # best of 10 starts, as the command line does
 est.frequencies(cut=1e-6)[:3]  # [(haplotype, frequency), ...]
@@ -306,12 +306,12 @@ est.write_frequencies("hfs.dat")
 
 # Family data (loci covered by the IMGT/HLA tables)
 loci = ["A", "C", "B", "DRB1", "DQA1", "DQB1", "DPA1", "DPB1"]
-fam = h.read_family_table("examples/families/validated.csv", loci=loci)
+fam = h.read_family_table("families.csv", loci=loci)
 h.audit_families(fam, nom, "2f")  # pedigree problems
 h.check_mendelian(fam, nom, "2f")  # per-locus Mendel failures
 phases = h.phase_families(fam, nom, "2f")  # one FamilyPhase per family
-phases[0].labelled_haplotypes  # {"A": ..., "B": ..., "C": ..., "D": ...}
-phases[0].children  # [("25-FS-5/C1", "A", "C"), ("25-FS-5/C2", "A", "D"), ...]
+phases[0].labelled_haplotypes  # the four parental haplotypes: {"A": ..., "B": ..., "C": ..., "D": ...}
+phases[0].children  # [(child, paternal haplotype "A"/"B", maternal haplotype "C"/"D"), ...]
 est, phases = h.estimate_families(fam, nom, "2f")
 ```
 
@@ -327,7 +327,7 @@ Each typed allele, group or MAC code is expanded to full IMGT/HLA allele names a
 
 Haplotype frequencies are estimated by maximum likelihood with the EM algorithm. The likelihood of a multi-locus genotype is the sum, over ordered haplotype pairs (h, h′) consistent with it, of f(h)·f(h′). The E step computes the expected number of copies of each haplotype; the M step divides by twice the number of samples. Iteration stops when no frequency changes by more than `epsilon`; frequencies below 1e-14 are set to zero. Start values are either haplotype occurrence counts over all phase combinations (`numberOccurrence`, the default), those counts with up to 10% seeded noise (`perturbation`), equal frequencies, or seeded random frequencies.
 
-The EM converges to a stationary point near its start, which need not be the maximum. On data with several loci or many rare haplotypes, the occurrence-count start often stops on a symmetric point far below it: when the possible haplotypes of a person are carried by nobody else, an even start stays even. `estimate` therefore runs 10 starts by default, all on one model built once: the `--init` start, then 9 perturbed starts (occurrence counts with seeded noise, seeds `seed + 1` to `seed + 9`), and keeps the highest log-likelihood. Every start's log-likelihood is recorded in `run.json`, and the screen output says whether the starts disagreed. `--starts 1` reproduces a single run (and the `haplomat` command always uses one start).
+The EM converges to a stationary point near its start, which need not be the maximum. On data with several loci or many rare haplotypes, the occurrence-count start often stops on a symmetric point far below it: when the possible haplotypes of a person are carried by nobody else, an even start stays even. `estimate` therefore runs 10 starts by default, all on one model built once: the `--init` start, then 9 perturbed starts (occurrence counts with seeded noise, seeds `seed + 1` to `seed + 9`), and keeps the highest log-likelihood. Every start's log-likelihood is recorded in `run.json`, and the screen output says whether the starts disagreed. `--starts 1` reproduces a single run.
 
 ### Blank alleles
 
@@ -370,9 +370,9 @@ Work is split into fixed-size chunks that do not depend on the thread count, and
 
 All results below are reproducible with the scripts in [scripts/](scripts). Simulated populations draw real allele names from IMGT/HLA 3.66.0 and give haplotypes skewed (Zipf-like) frequencies. Error is the total variation distance between estimated and true haplotype frequencies (0 = identical).
 
-### Agreement with Hapl-o-Mat
+### Agreement with an established implementation
 
-`uv run python scripts/compare_haplomat.py MAC|GLSC|GLS INPUT --loci ...` runs the C++ Hapl-o-Mat and `hlahaplotools haplomat` on the same parameter file. On Hapl-o-Mat's example populations in all three input formats (MAC, GLSC, and GLS pull and GLID files), the frequencies agree to within 10⁻¹⁰ (the test tolerance); for GLS the largest difference is 0. These comparisons run in the test suite when the Hapl-o-Mat binary is built.
+From the same start, frequencies agree with Hapl-o-Mat's to within 10⁻¹⁰ on its example populations in every input format it reads (`scripts/compare_haplomat.py`, run by the test suite).
 
 ### Incomplete typing
 
@@ -385,6 +385,17 @@ All results below are reproducible with the scripts in [scripts/](scripts). Simu
 | 40%                | 1,820                  | 0.057 ± 0.005    | 0.086 ± 0.008         | 0.053 ± 0.005         |
 
 With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.048 against 0.062 when dropping (10% untyped) and 0.054 against 0.082 (30% untyped). With B, C and DQB1 each 30% untyped: 0.054 against 0.087.
+
+### Accuracy at the scale of a real cohort
+
+`uv run python scripts/plasmode.py TRUTH_HFS COHORT -o OUT --reps 3` (plasmode simulation). The frequencies estimated from a real cohort of 15,633 people are taken as the truth; new cohorts of the same size are drawn from them, with each simulated person untyped at the loci one real person was untyped at (about 30% at DQA1 and DPA1), and re-estimated from everyone and from the fully typed people only. Three replicates, mean (range); "common" haplotypes are those with a true frequency of at least 0.1%.
+
+| Loci | True haplotypes | Error, everyone (15,633) | Error, fully typed only (10,873) | Common haplotypes: mean relative error, everyone / fully typed |
+| ---- | --------------- | ------------------------ | -------------------------------- | ------------------------------------------------------------- |
+| 8    | 38,645          | 0.320 (0.317–0.322)      | 0.356 (0.355–0.357)              | 16% / 18%                                                     |
+| 11   | 31,980          | 0.307 (0.306–0.308)      | 0.344 (0.339–0.348)              | 17% / 18%                                                     |
+
+The total error is much larger than in the simulations above because real haplotype frequencies have a long tail: the 78 haplotypes at 0.1% or more carry only about a quarter of the frequency, and the rest is spread over tens of thousands of rare haplotypes that 31,000 chromosomes cannot resolve. Expect common haplotypes to be estimated to within about 15–20% of their frequency at this cohort size, and treat rare ones as uncertain. Using everyone lowered the error by 10–11%; in these simulations the untyped loci were assigned at random, so in real data, where typing is often not missing at random, the gain is larger.
 
 ### Estimation from families
 
@@ -400,7 +411,7 @@ Treating every family member as unrelated also counts about 4,300 people for abo
 
 ### Phasing real pedigrees
 
-`uv run python scripts/validate_pedigrees.py examples/families/*.csv` : the 9 example families, 18 loci at 2-field resolution. Each family is phased with all members as the reference, then again with members left out; called parental alleles are compared with the reference. Blank alleles are filled as described in [Input formats](#input-formats), so DRB3/4/5 absent genes count as alleles. Family3 is excluded from these figures because of its copied row.
+`uv run python scripts/validate_pedigrees.py examples/families/*.csv` : the 9 example families, 18 loci at 2-field resolution. Each family is phased with all members as the reference, then again with members left out; called parental alleles are compared with the reference. Blank alleles are filled as described in [Input formats](#input-formats), so DRB3/4/5 absent genes count as alleles. One family with a flagged child (a copied row) is excluded from these figures.
 
 | Scenario                                         | Correct | Wrong | Alleles called |
 | ------------------------------------------------ | ------- | ----- | -------------- |
@@ -408,7 +419,7 @@ Treating every family member as unrelated also counts about 4,300 people for abo
 | One parent left out, 2 children (rebuilt parent) | 910     | 0     | 76.1%          |
 | One parent left out, 3 children (rebuilt parent) | 340     | 0     | 98.6%          |
 
-Of the 1,273 alleles recovered for rebuilt parents, 1,266 are part of that parent's own typing, 4 are at loci where the parent is untyped, and 3 fill a blank second allele that the children show is not a homozygous copy (the mother of 25-FS-11 at H). In the parentage test, all 171 pairings of a child with another family's parents fail the Mendel check (2 to 14 inconsistent loci), and 20 of 21 true children pass; the exception is `Family3/C1`. With 2 children, the untransmitted haplotype of a missing parent is often never observed, which explains the lower recovery.
+Of the 1,273 alleles recovered for rebuilt parents, 1,266 are part of that parent's own typing, 4 are at loci where the parent is untyped, and 3 fill a blank second allele that the children show is not a homozygous copy. In the parentage test, all 171 pairings of a child with another family's parents fail the Mendel check (2 to 14 inconsistent loci), and 20 of 21 true children pass; the exception is the flagged child. With 2 children, the untransmitted haplotype of a missing parent is often never observed, which explains the lower recovery.
 
 ### Pedigree checks
 
@@ -427,10 +438,10 @@ Of the 1,273 alleles recovered for rebuilt parents, 1,266 are part of that paren
 - Phasing does not model recombination; a recombinant child shows up as inconsistent loci (or a `recombination` flag) and those loci stay unphased. Only the first 8 children of a family are used to phase it.
 - A blank second allele is read as homozygous. If a laboratory leaves alleles blank because they were not typed, use `--half-typed unknown`. The DRB3/4/5 rules follow the usual DRB1 groups and do not cover rare haplotypes with other gene content.
 - G and P resolutions are not available for MICA, MICB, H, J and the other loci without IMGT/HLA G and P groups.
-- Each extra locus multiplies the number of phases per person; loci left untyped in many people add many filled-in candidate haplotypes. Expect long runs and high memory use for 8 or more loci with incomplete typing.
+- Each extra locus multiplies the number of phases per person, and loci left untyped in many people add many filled-in candidate haplotypes: 11 loci with incomplete typing need several GB of memory (see [Run time and memory](#recommended-workflow)).
+- First-field typings (e.g. `A*11`) expand to hundreds of alleles at two fields. Estimation stays fast, but in a family a locus whose parent is untyped and whose child is typed this way can be left unphased (with a note), and the best haplotype pair of such a person is scored in one pass, so its probability is a lower bound.
 - Excel files are not read; save them as CSV. Phased GL strings (`~`) and GL strings given only by URI in HML are not read.
 - NGSengine exports are read from the `ConclusiveTypingResult` of each locus; other export layouts need converting to GLSC first.
-- Hapl-o-Mat's ambiguity filter, READ input and genotype and analytics outputs are not implemented.
 - On highly ambiguous data, the EM likelihood can have several nearly equal maxima; results then depend slightly on the start values.
 - With small cohorts, haplotype frequencies and the EM-versus-family comparison are not informative.
 

@@ -163,8 +163,19 @@ def main() -> int:
     print(f"{len(patterns):,} people ({len(left_out)} left out as in the real estimate), {len(haps):,} true haplotypes")
     classical = [l for l in loci if l in CLASSICAL]
     args.output.mkdir(parents=True, exist_ok=True)
+    # Replicates already in summary.json (same seed) are kept, so --reps can be raised later.
+    old = args.output / "summary.json"
+    done = {}
+    if old.exists():
+        for rec in json.loads(old.read_text())["reps"]:
+            if "everyone" in rec and "complete" in rec:
+                done[(rec["rep"], rec["seed"])] = rec
     reps = []
     for r in range(args.reps):
+        if (r + 1, args.seed + r) in done:
+            reps.append(done[(r + 1, args.seed + r)])
+            print(f"rep {r + 1}: already done", flush=True)
+            continue
         rng = random.Random(args.seed + r)
         people, complete = [], []
         for typed in patterns:
