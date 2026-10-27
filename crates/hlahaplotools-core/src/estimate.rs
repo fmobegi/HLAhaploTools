@@ -1420,6 +1420,10 @@ pub(crate) fn estimate_resolved(
 /// Candidates are the best-matching haplotypes of every positive phase term;
 /// each candidate's probability is then computed exactly: the frequency of
 /// the pair (counting both orders when both fit) over the sample's likelihood.
+/// Above this many (candidate pair x reported genotype) checks for one person, the
+/// best pair is scored in one pass (see [`best_diplotypes`]).
+const DIPLOTYPE_EXACT_MAX: usize = 10_000_000;
+
 fn best_diplotypes(
     model: &Model,
     f: &[f64],
@@ -1465,6 +1469,36 @@ fn best_diplotypes(
             }
             candidates.sort_unstable();
             candidates.dedup();
+            if candidates.len().saturating_mul(reports.len()) > DIPLOTYPE_EXACT_MAX {
+                // Low-resolution typing: scoring every candidate against every reported
+                // genotype is quadratic (~1e10 for A*11+A*33 at two fields). Score each
+                // pair only on the genotypes that proposed it instead; the probability is
+                // then a lower bound (a pair can also fit genotypes that proposed another).
+                let mut score: FxHashMap<(u32, u32), f64> = FxHashMap::default();
+                let mut here: Vec<(u32, u32)> = Vec::new();
+                for &(p, w) in reports {
+                    here.clear();
+                    for &(x, y, c) in &model.terms[model.term_off[p]..model.term_off[p + 1]] {
+                        let (hx, hy) = (best_of[x as usize], best_of[y as usize]);
+                        if c > 0.0 && hx != u32::MAX && hy != u32::MAX {
+                            here.push((hx.min(hy), hx.max(hy)));
+                        }
+                    }
+                    here.sort_unstable();
+                    here.dedup();
+                    let key = &phenotypes[p].0;
+                    for &(h1, h2) in &here {
+                        let orders =
+                            fits(key, h1, h2) as u32 + (h1 != h2 && fits(key, h2, h1)) as u32;
+                        *score.entry((h1, h2)).or_insert(0.0) +=
+                            w * f[h1 as usize] * f[h2 as usize] * orders as f64;
+                    }
+                }
+                return candidates
+                    .into_iter()
+                    .map(|k| (k.0, k.1, score.get(&k).copied().unwrap_or(0.0) / likelihood))
+                    .max_by(|a, b| a.2.total_cmp(&b.2).then((b.0, b.1).cmp(&(a.0, a.1))));
+            }
             candidates
                 .into_iter()
                 .map(|(h1, h2)| {
