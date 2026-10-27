@@ -564,6 +564,29 @@ struct LocusModel {
     quads: Vec<[(u32, u32); 2]>,
     /// Quads grouped by their per-child masks: (masks, quad indices).
     groups: Vec<(Vec<u8>, Vec<usize>)>,
+    /// Too many possibilities to search (e.g. an untyped parent and a child
+    /// typed at the first field only): the locus fits any inheritance and
+    /// is left unphased.
+    skipped: bool,
+}
+
+/// Most work (parent-pair combinations x child genotype options) spent on one locus.
+const MAX_LOCUS_WORK: usize = 50_000_000;
+
+/// How many ordered allele pairs `parent_pairs` would return, without building them.
+fn parent_pair_count(opts: Option<&[(LocusGeno, f64)]>, domain: usize) -> usize {
+    let any = domain + 1;
+    match opts.filter(|o| o.iter().any(|(g, _)| g.a != WILD)) {
+        None => any.saturating_mul(any),
+        Some(opts) => opts
+            .iter()
+            .map(|(g, _)| match (g.a, g.b) {
+                (WILD, _) => 0,
+                (_, WILD) => 2 * any,
+                _ => 2,
+            })
+            .fold(0usize, usize::saturating_add),
+    }
 }
 
 impl LocusModel {
@@ -582,6 +605,17 @@ impl LocusModel {
             .collect();
         domain.sort_unstable();
         domain.dedup();
+        let child_opts: usize = children.iter().map(|c| c.len().max(1)).sum();
+        let work = parent_pair_count(father, domain.len())
+            .saturating_mul(parent_pair_count(mother, domain.len()))
+            .saturating_mul(child_opts);
+        if work > MAX_LOCUS_WORK {
+            return LocusModel {
+                quads: Vec::new(),
+                groups: vec![(vec![0b1111; children.len()], Vec::new())],
+                skipped: true,
+            };
+        }
         let (fp, mp) = (parent_pairs(father, &domain), parent_pairs(mother, &domain));
         let mut quads = Vec::with_capacity(fp.len() * mp.len());
         let mut index: FxHashMap<Vec<u8>, usize> = FxHashMap::default();
@@ -615,7 +649,11 @@ impl LocusModel {
                 }
             }
         }
-        LocusModel { quads, groups }
+        LocusModel {
+            quads,
+            groups,
+            skipped: false,
+        }
     }
 
     /// Does some inheritance pattern fit every child at this locus?
@@ -693,6 +731,18 @@ pub(crate) fn phase_one(
             )
         })
         .collect();
+    let skipped: Vec<&str> = models
+        .iter()
+        .zip(&ds.loci)
+        .filter(|(m, _)| m.skipped)
+        .map(|(_, l)| l.as_str())
+        .collect();
+    if !skipped.is_empty() {
+        notes.push(format!(
+            "too many possibilities to phase {} (low-resolution typing with an untyped parent): left unphased",
+            skipped.join(", ")
+        ));
+    }
 
     // Search inheritance assignments. Children are in label order, so the
     // lowest-numbered typed child defines haplotypes A (father) and C (mother).

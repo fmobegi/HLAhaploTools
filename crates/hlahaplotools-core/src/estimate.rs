@@ -343,22 +343,54 @@ impl<'a> Resolver<'a> {
     }
 }
 
-/// Small insertion-ordered map from key to summed weight.
+/// Insertion-ordered map from key to summed weight.
+///
+/// Short lists are searched in place; from `INDEX_FROM` entries on, a hash
+/// index is kept as well, so a low-resolution typing that expands into
+/// hundreds of thousands of genotypes (e.g. `A*11+A*33` at two fields) stays
+/// linear instead of quadratic. The order, and so the result, is the same.
 struct WeightedList<K> {
     items: Vec<(K, f64)>,
+    index: Option<FxHashMap<K, usize>>,
 }
 
 impl<K> Default for WeightedList<K> {
     fn default() -> Self {
-        WeightedList { items: Vec::new() }
+        WeightedList {
+            items: Vec::new(),
+            index: None,
+        }
     }
 }
 
-impl<K: PartialEq> WeightedList<K> {
+const INDEX_FROM: usize = 32;
+
+impl<K: PartialEq + Eq + std::hash::Hash + Copy> WeightedList<K> {
     fn add(&mut self, key: K, w: f64) {
+        if let Some(index) = &mut self.index {
+            match index.get(&key) {
+                Some(&i) => self.items[i].1 += w,
+                None => {
+                    index.insert(key, self.items.len());
+                    self.items.push((key, w));
+                }
+            }
+            return;
+        }
         match self.items.iter_mut().find(|(k, _)| *k == key) {
             Some((_, total)) => *total += w,
-            None => self.items.push((key, w)),
+            None => {
+                self.items.push((key, w));
+                if self.items.len() >= INDEX_FROM {
+                    let index = self
+                        .items
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (k, _))| (*k, i))
+                        .collect();
+                    self.index = Some(index);
+                }
+            }
         }
     }
 }
@@ -681,10 +713,13 @@ fn build_model(
     let mut terms: Vec<(u32, u32, f64)> = Vec::new();
     let (mut x, mut y) = (Vec::with_capacity(n_loci), Vec::with_capacity(n_loci));
     let mut merged: Vec<(u32, u32, f64)> = Vec::new();
+    // Position of each (pattern, pattern) key in `merged`, so merging is linear.
+    let mut merged_at: FxHashMap<(u32, u32), usize> = FxHashMap::default();
 
     for (genotypes, weight) in phenotypes {
         let options: Vec<_> = genotypes.iter().map(|&g| locus_options(g)).collect();
         merged.clear();
+        merged_at.clear();
         for_each_combination(&options, |idx| {
             x.clear();
             y.clear();
@@ -698,9 +733,12 @@ fn build_model(
             let (px, _) = store.intern(&x);
             let (py, _) = store.intern(&y);
             let key = (px.min(py), px.max(py));
-            match merged.iter_mut().find(|t| (t.0, t.1) == key) {
-                Some(t) => t.2 += coef,
-                None => merged.push((key.0, key.1, coef)),
+            match merged_at.get(&key) {
+                Some(&i) => merged[i].2 += coef,
+                None => {
+                    merged_at.insert(key, merged.len());
+                    merged.push((key.0, key.1, coef));
+                }
             }
         });
         terms.extend(merged.iter().filter(|t| t.2 != 0.0));
@@ -1457,6 +1495,22 @@ mod tests {
         let ds = read_mac(input.as_bytes(), &ParseOptions::default()).unwrap();
         let res = vec![Resolution::AsItIs; ds.loci.len()];
         estimate(&ds, &Nomenclature::default(), &res, opts).unwrap()
+    }
+
+    #[test]
+    fn weighted_list_keeps_order_and_sums_with_an_index() {
+        // Past INDEX_FROM entries the list switches to a hash index; order and sums must not change.
+        let mut w = WeightedList::default();
+        for round in 0..3 {
+            for k in 0..100u32 {
+                w.add(k * 7 % 101, 1.0 + round as f64);
+            }
+        }
+        assert!(w.index.is_some());
+        let keys: Vec<u32> = w.items.iter().map(|(k, _)| *k).collect();
+        let expect: Vec<u32> = (0..100u32).map(|k| k * 7 % 101).collect();
+        assert_eq!(keys, expect);
+        assert!(w.items.iter().all(|(_, s)| (*s - 6.0).abs() < 1e-12));
     }
 
     fn freq(e: &Estimate, h: &str) -> f64 {

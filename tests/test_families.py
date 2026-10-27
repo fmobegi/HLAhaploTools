@@ -201,3 +201,35 @@ def test_families_cli(sim, tmp_path):
     mendel_rows = [l.split("\t") for l in (res / "mendel.tsv").read_text().splitlines()[1:]]
     assert all(row[2] == "" for row in mendel_rows)
     assert info["phasing"]["failed"] == len(mendel_rows) <= 5
+
+
+def test_low_resolution_typing_is_fast_and_left_unphased(nom, tmp_path):
+    """First-field typings expand to hundreds of alleles at 2f: phasing must stay fast.
+
+    The father is typed A*11+A*33 (about 165,000 two-field genotypes). With the
+    mother untyped and a child typed A*02 only, the A locus has too many
+    possibilities to phase and is left unphased with a note; B is still phased.
+    """
+    p = tmp_path / "lowres.csv"
+    p.write_text(
+        "FAMILY_ID,Family_Member,A_1,A_2,B_1,B_2\n"
+        "f1,F,A*11,A*33,B*07:02,B*08:01\n"
+        "f1,M,,,,\n"
+        "f1,C1,A*11:01,A*02,B*07:02,B*44:02\n"
+        "f1,C2,A*33:01,A*02,B*08:01,B*44:02\n"
+        "f2,F,A*11,A*33,B*07:02,B*08:01\n"
+        "f2,M,A*01:01,A*02:01,B*44:02,B*35:01\n"
+        "f2,C1,A*11:01:01:01,A*01:01,B*07:02,B*44:02\n"
+    )
+    import time
+
+    fam = h.read_family_table(str(p))
+    t = time.perf_counter()
+    phases = h.phase_families(fam, nom, "2f")
+    assert time.perf_counter() - t < 10
+    f1, f2 = phases
+    assert any("too many possibilities to phase A" in n for n in f1.notes)
+    # B is still phased in f1, and both loci in f2 (the typed mother narrows A).
+    assert "B*07:02" in f1.haplotypes[0] + f1.haplotypes[1]
+    assert not any("too many possibilities" in n for n in f2.notes)
+    assert h.check_mendelian(fam, nom, "2f") == []
