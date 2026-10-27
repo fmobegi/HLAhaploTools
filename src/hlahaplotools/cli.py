@@ -12,6 +12,8 @@ from pathlib import Path
 
 from hlahaplotools._core import (
     Nomenclature,
+    hardy_weinberg,
+    linkage_disequilibrium,
     read_gls,
     read_glsc,
     read_hml,
@@ -451,6 +453,99 @@ def cmd_summary(args) -> int:
 # ---------------------------------------------------------------- argparse
 
 
+def cmd_stats(args) -> int:
+    """Hardy–Weinberg tests per locus and linkage disequilibrium per pair of loci.
+
+    Hardy–Weinberg uses the people whose genotype is unambiguous at the target
+    resolution (untyped, half-typed and ambiguous people are counted apart): observed
+    and expected heterozygosity, F = 1 - Ho/He, and an exact test from random pairings
+    of the same alleles. A blank second allele read as homozygous adds homozygotes; the
+    number is reported, and --half-typed unknown leaves such people out instead.
+
+    Linkage disequilibrium uses the two-locus haplotype frequencies estimated by EM from
+    everyone typed at either locus: Hedrick's D', Wn (Cramér's V of the haplotype
+    table), a likelihood-ratio test of linkage equilibrium (chi-square, approximate when
+    many alleles are rare), and D' per allele pair. With --ld-permutations, linkage
+    equilibrium is tested by permutation: one locus is shuffled across people and the
+    two-locus likelihood re-estimated (the chi-square statistic is reported for reference;
+    with many rare alleles its chi-square distribution does not hold).
+    """
+    say = (lambda *a: None) if args.quiet else print
+    nom_dir, mac, manifest = resolve_data_paths(args)
+    loci_res = parse_loci(args.loci)
+    loci = [l for l, _ in loci_res]
+    t0 = time.perf_counter()
+    ds, fmt = read_input(
+        args.input, args.format, mac, loci, args.half_typed, not args.no_drb345, args.glid, args.include_unapproved
+    )
+    nom = Nomenclature(str(nom_dir))
+    res = [r for _, r in loci_res]
+    say(f"Read {len(ds)} samples from {args.input} ({fmt.upper()}); {len(ds.issues)} lines unreadable")
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+
+    hwe = hardy_weinberg(ds, nom, res, permutations=args.permutations, seed=args.seed, threads=args.threads)
+    t1 = time.perf_counter()
+    cols = ["locus", "n", "alleles", "observed_heterozygosity", "expected_heterozygosity", "f", "p_value",
+            "untyped", "half_typed", "ambiguous", "homozygous_filled"]  # fmt: skip
+    _tsv(out / "hwe.tsv", cols, ([r[c] for c in cols] for r in hwe))
+    say(f"Hardy–Weinberg ({args.permutations:,} random tables per locus; hwe.tsv):")
+    for r in hwe:
+        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}"
+        note = f"  ({r['homozygous_filled']} read as homozygous from a blank)" if r["homozygous_filled"] else ""
+        ho, he = r["observed_heterozygosity"], r["expected_heterozygosity"]
+        say(f"  {r['locus']:6} n={r['n']:6}  Ho={ho:.3f}  He={he:.3f}  F={r['f']:+.3f}  P={p}{note}")
+
+    if args.pairs == "adjacent":
+        pairs = list(zip(loci, loci[1:], strict=False))
+    else:
+        pairs = [(a, b) for i, a in enumerate(loci) for b in loci[i + 1 :]]
+    ld = linkage_disequilibrium(
+        ds, nom, res, pairs, epsilon=args.epsilon, seed=args.seed, starts=args.starts,
+        min_genotype_frequency=args.min_genotype_frequency, max_completions=args.max_completions,
+        completion=args.completion, threads=args.threads, permutations=args.ld_permutations,
+    )  # fmt: skip
+    t2 = time.perf_counter()
+    cols = ["locus_a", "locus_b", "n", "alleles_a", "alleles_b", "d_prime", "wn", "chi2", "df", "p_value"]
+    _tsv(out / "ld.tsv", cols, ([r[c] for c in cols] for r in ld))
+    pcols = ["allele_a", "allele_b", "haplotype_frequency", "frequency_a", "frequency_b", "d", "d_prime"]
+    _tsv(out / "ld_alleles.tsv", ["locus_a", "locus_b", *pcols],
+         ([r["locus_a"], r["locus_b"], *[p[c] for c in pcols]] for r in ld for p in r["pairs"]))  # fmt: skip
+    perm = f"; P from {args.ld_permutations:,} permutations" if args.ld_permutations else ""
+    say(f"Linkage disequilibrium (ld.tsv; per allele pair in ld_alleles.tsv{perm}):")
+    for r in ld:
+        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}"
+        say(f"  {r['locus_a']}~{r['locus_b']:6} n={r['n']:6}  D'={r['d_prime']:.3f}  Wn={r['wn']:.3f}"
+            f"  P={p}")  # fmt: skip
+
+    info = {
+        "tool": "hlahaplotools",
+        "version": _version(),
+        "input": str(args.input),
+        "format": fmt,
+        "loci_and_resolutions": dict(loci_res),
+        "imgthla_release": manifest.get("imgthla", {}).get("release") or nom.source,
+        "mac_last_updated": manifest.get("mac", {}).get("last_updated"),
+        "parameters": {
+            "permutations": args.permutations,
+            "ld_permutations": args.ld_permutations,
+            "seed": args.seed,
+            "pairs": args.pairs,
+            "starts": args.starts,
+            "epsilon": args.epsilon,
+            "completion": args.completion,
+            "half_typed": args.half_typed,
+            "drb345_from_drb1": not args.no_drb345,
+        },  # fmt: skip
+        "samples_read": len(ds),
+        "unreadable_lines": [{"line": l, "id": i, "reason": r} for l, i, r in ds.issues],
+        "seconds": {"hardy_weinberg": round(t1 - t0, 3), "linkage_disequilibrium": round(t2 - t1, 3)},
+    }
+    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n")
+    say(f"Wrote hwe.tsv, ld.tsv, ld_alleles.tsv and run.json to {out}")
+    return 0
+
+
 def _tsv(path: Path, header: list[str], rows) -> None:
     with path.open("w") as f:
         f.write("\t".join(header) + "\n")
@@ -744,6 +839,36 @@ def build_parser() -> argparse.ArgumentParser:
     data_options(f)
     run_options(f)
     f.set_defaults(func=cmd_families)
+
+    st = sub.add_parser(
+        "stats",
+        help="Hardy–Weinberg tests per locus and linkage disequilibrium per pair of loci",
+        description=cmd_stats.__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    st.add_argument("input", help="typing file, as for estimate")
+    st.add_argument("--loci", required=True, help="loci and resolutions, e.g. A:2f,B:2f,C:2f,DRB1:2f")
+    input_options(st)
+    st.add_argument("-o", "--output", default="results/stats", help="output folder (default: results/stats)")
+    st.add_argument("--permutations", type=int, default=10_000, help="random tables per Hardy–Weinberg test")
+    st.add_argument(
+        "--pairs",
+        choices=["all", "adjacent"],
+        default="all",
+        help="locus pairs for linkage disequilibrium: every pair (default) or neighbours in --loci order",
+    )
+    st.add_argument("--starts", type=int, default=10, help="EM starts for each two-locus estimate (default 10)")
+    st.add_argument(
+        "--ld-permutations",
+        type=int,
+        default=0,
+        help="permutation test of linkage equilibrium per pair: datasets with one locus shuffled "
+        "(each needs an EM; default 0, no P-value)",
+    )
+    em_options(st)
+    data_options(st)
+    run_options(st)
+    st.set_defaults(func=cmd_stats)
 
     h = sub.add_parser("haplomat", help="run from a Hapl-o-Mat parameter file")
     h.add_argument(

@@ -12,6 +12,7 @@ HLAhaploTools estimates HLA haplotype frequencies from population and family typ
 - **Any target resolution**: per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
 - **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
 - **HLA reporting conventions**: a blank second allele is read as homozygous, and blank DRB3, DRB4 and DRB5 cells are filled from the DRB1 typing (absent genes included). In families, a homozygous reading that breaks Mendelian inheritance is undone.
+- **Population statistics**: Hardy–Weinberg exact tests per locus, and linkage disequilibrium (D′, Wn and a permutation test) per pair of loci, estimated from incompletely typed people too.
 - **Family data**: Mendel checks, phasing of parents from their children (including untyped parents), estimation from founders only, and checks that flag non-paternity, sample swaps, copied rows, non-siblings and recombinants.
 - **Reproducible**: results are bit-identical on any number of threads, and every run records the IMGT/HLA release, MAC table date and all parameters.
 
@@ -120,7 +121,8 @@ Check `flags.tsv` first: correct or remove flagged people and rerun. Every file 
 3. **Choose the loci and resolution.** Two-field resolution (`2f`) suits most work; use `g` or `G` when typings mix depths and you want them grouped. A typing coarser than the target (e.g. `A*02` at `2f`) is spread over all the alleles it covers, which costs time and adds uncertainty. Every extra locus multiplies the number of possible haplotypes, so start with the loci you need.
 4. **Check the reporting conventions.** By default a blank second allele means homozygous and blank DRB3/4/5 cells are filled from DRB1. If your laboratory leaves a second allele blank because it was not typed, add `--half-typed unknown`.
 5. **Run with the defaults.** Ten EM starts and linked completion of untyped loci are the defaults for good reason; the screen says whether the starts agreed. If they did not, the best fit is kept and the spread is recorded in `run.json`.
-6. **Report the run.** Quote the IPD-IMGT/HLA release and MAC table date from `run.json`, together with the loci, resolution and number of people used. Rare haplotypes, below about 1 in 1,000, are uncertain at any cohort size typical of HLA studies (see [Validation](#validation)).
+6. **Check Hardy–Weinberg and linkage disequilibrium.** `hlahaplotools stats INPUT --loci ...` tests each locus for Hardy–Weinberg proportions and measures linkage disequilibrium between loci. A locus far from Hardy–Weinberg often points to typing problems (missed heterozygotes, or blanks read as homozygous) or to a mixed population.
+7. **Report the run.** Quote the IPD-IMGT/HLA release and MAC table date from `run.json`, together with the loci, resolution and number of people used. Rare haplotypes, below about 1 in 1,000, are uncertain at any cohort size typical of HLA studies (see [Validation](#validation)).
 
 **Run time and memory.** Measured on a laptop (4 cores, 16 GB) for a cohort of 15,633 people typed at mixed depth with DQA1 and DPA1 untyped in about 30%, at two-field resolution with ten starts:
 
@@ -228,6 +230,7 @@ A typing that covers several alleles at the target resolution (e.g. `A*02` at `2
 uv run hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]   # population data
 uv run hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]   # family data
 uv run hlahaplotools haplomat  MAC|GLSC|GLS PARAMETER_FILE             # run from a parameter file
+uv run hlahaplotools stats     INPUT --loci A:2f,B:2f,... [-o results/stats]  # Hardy–Weinberg and LD
 uv run hlahaplotools summary   INPUT                                   # describe an input file
 uv run hlahaplotools rename    INPUT OUTPUT                            # update retired allele names
 ```
@@ -261,6 +264,8 @@ Options for `estimate` and `families`:
 
 `rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
+`stats` takes the same input options as `estimate`, plus `--permutations` (random tables per Hardy–Weinberg test, default 10,000), `--pairs all|adjacent` (every pair of loci, or only neighbours in `--loci` order) and `--ld-permutations` (shuffled datasets per linkage-disequilibrium test; default 0, no P-value).
+
 The exit status is 0 on success and 2 if the EM did not converge.
 
 ## Output files
@@ -285,6 +290,15 @@ The exit status is 0 on success and 2 if the EM did not converge.
 | `diplotypes.tsv`           | Most likely haplotype pair per founder, with its posterior probability                                                                                                                   |
 | `comparison.json`          | EM on founders as unrelated people compared with the family phasing (meaningful for larger cohorts)                                                                                      |
 | `run.json`                 | As for `estimate`, plus family counts, phasing status counts and flag counts                                                                                                           |
+
+### `stats`
+
+| File              | Contents |
+| ----------------- | -------- |
+| `hwe.tsv`         | Per locus: people tested, alleles, observed and expected heterozygosity, F, exact-test P, and people not tested (untyped, half-typed, ambiguous) or read as homozygous from a blank |
+| `ld.tsv`          | Per pair of loci: people used, alleles at each locus, D′, Wn, likelihood-ratio statistic, nominal degrees of freedom, and the permutation P-value (with `--ld-permutations`) |
+| `ld_alleles.tsv`  | Per pair of loci and allele pair: haplotype frequency, allele frequencies, D and D′, most frequent first |
+| `run.json`        | Input, loci and resolutions, reference data versions and parameters |
 
 ## Python API
 
@@ -317,7 +331,7 @@ phases[0].children  # [(child, paternal haplotype "A"/"B", maternal haplotype "C
 est, phases = h.estimate_families(fam, nom, "2f")
 ```
 
-`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a dict. `read_glsc` reads GL string tables, `read_gls(pull, glid)` GLS input, `read_hml(paths)` HML files and `read_ngsengine(paths, include_unapproved=False)` NGSengine exports (one path or a list); `ds.notes` lists locus results left untyped while reading, and `h.sniff_xml(path)` tells HML from NGSengine. All readers take `half_typed="homozygous"|"unknown"` and `drb345=True|False`. Passing `mac_codes` as a path loads only the codes the input uses; `h.MacCodes(path)` loads the whole table for reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
+`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a dict. `h.hardy_weinberg(ds, nom, "2f")` and `h.linkage_disequilibrium(ds, nom, "2f", pairs=[("A", "B")])` return the statistics of `stats` as lists of dicts. `read_glsc` reads GL string tables, `read_gls(pull, glid)` GLS input, `read_hml(paths)` HML files and `read_ngsengine(paths, include_unapproved=False)` NGSengine exports (one path or a list); `ds.notes` lists locus results left untyped while reading, and `h.sniff_xml(path)` tells HML from NGSengine. All readers take `half_typed="homozygous"|"unknown"` and `drb345=True|False`. Passing `mac_codes` as a path loads only the codes the input uses; `h.MacCodes(path)` loads the whole table for reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
 
 ## Methods
 
@@ -364,6 +378,12 @@ Relatives share haplotypes, so only founders (parents, typed or rebuilt) enter t
 
 Each child is compared with haplotypes phased from the rest of its family, leaving out members already shown not to belong. Parent–child genotype matches also happen naturally (when the other parent carries the same haplotype), so a match is only reported when the child also fails to fit the other parent. Identical genotypes between unrelated people with common haplotypes are not rare, so cross-family duplicates are only reported on request.
 
+### Hardy–Weinberg and linkage disequilibrium
+
+**Hardy–Weinberg.** Only people whose genotype at the locus is unambiguous at the target resolution are tested; untyped, half-typed and ambiguous people are counted apart. Expected heterozygosity is Nei's unbiased estimate, 2n/(2n−1)(1 − Σp²), and F = 1 − Ho/He (positive when heterozygotes are too few). The exact test compares the probability of the observed genotype table, given the allele counts, with that of tables formed by pairing the same alleles at random; P is the share of random tables at most as probable as the observed one. With large samples even small departures are significant, so read F alongside P. A blank second allele read as homozygous adds homozygotes; their number is reported, and `--half-typed unknown` leaves those people out.
+
+**Linkage disequilibrium.** For each pair of loci, haplotype frequencies are estimated by EM from everyone typed at either locus. With allele frequencies p and q and D = p_ab − p_a q_b: D′ for an allele pair divides D by its largest possible value with the same sign; the overall D′ (Hedrick) is Σ p_a q_b |D′_ab|; and Wn (Cohen) is √(Σ D²/(p_a q_b) / (min(k, l) − 1)), Cramér's V of the haplotype table, 0 under equilibrium and 1 when each allele at one locus goes with one at the other. With `--ld-permutations N`, linkage equilibrium is tested by permutation: one locus is shuffled across people, which keeps each locus's own data but breaks any association, the two-locus likelihood is re-estimated, and P is the share of the N shuffled datasets that fit at least as well as the real one (each needs an EM, so this takes time). The likelihood-ratio statistic 2(logL₂ − logL_A − logL_B) is also written, with its nominal (k − 1)(l − 1) degrees of freedom, but no χ² P-value: HLA loci at two fields have hundreds of mostly rare alleles, and the χ² approximation then fails.
+
 ### Determinism
 
 Work is split into fixed-size chunks that do not depend on the thread count, and partial sums are combined in a fixed order, so results are bit-identical on any number of threads.
@@ -398,6 +418,19 @@ With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.048 
 | 11   | 31,980          | 0.307 (0.306–0.308)     | 0.344 (0.339–0.348)             | 17% / 18%                                                      |
 
 The total error is much larger than in the simulations above because real haplotype frequencies have a long tail: the 78 haplotypes at 0.1% or more carry only about a quarter of the frequency, and the rest is spread over tens of thousands of rare haplotypes that 31,000 chromosomes cannot resolve. Expect common haplotypes to be estimated to within about 15–20% of their frequency at this cohort size, and treat rare ones as uncertain. Using everyone lowered the error by 10–11%; in these simulations the untyped loci were assigned at random, so in real data, where typing is often not missing at random, the gain is larger.
+
+### Hardy–Weinberg and linkage disequilibrium against PyPop
+
+`hlahaplotools stats` and PyPop 1.4.2 (Guo–Thompson exact test; pairwise LD from emhaplofreq) on the same 5,000 people from a real cohort, typed at A, B, C, DRB1 and DQB1 at two-field resolution (86, 139, 67, 73 and 36 alleles):
+
+| Measure | Agreement over the 10 locus pairs or 5 loci |
+| ------- | ------------------------------------------- |
+| D′ | within 0.0004 for every pair |
+| Likelihood-ratio statistic 2(logL₂ − logL_A − logL_B) | within 2 units (of 3,300–37,000) for every pair |
+| Wn | identical to three decimals for 8 pairs; A–B and B–DRB1 differ by 0.008, where PyPop's EM reached a likelihood about 0.5 units higher |
+| Hardy–Weinberg | both reject equilibrium at every locus (PyPop P ≤ 9 × 10⁻⁵, HLAhaploTools P < 10⁻⁵) |
+
+PyPop took 26 minutes, HLAhaploTools 56 seconds with 100,000 random tables per Hardy–Weinberg test.
 
 ### Estimation from families
 

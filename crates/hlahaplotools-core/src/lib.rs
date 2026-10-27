@@ -23,6 +23,7 @@ pub mod nomenclature;
 pub mod output;
 pub mod parse;
 pub mod resolve;
+pub mod stats;
 pub mod typing;
 pub mod xml;
 
@@ -44,5 +45,8 @@ pub use parse::{
     read_glsc, read_glsc_file, read_mac, read_mac_file, read_table, read_table_file,
 };
 pub use resolve::{Resolution, translate};
+pub use stats::{
+    HweOptions, HweResult, LdPair, LdResult, chi2_sf, hardy_weinberg, linkage_disequilibrium,
+};
 pub use typing::{TypingKind, classify};
 pub use xml::{XmlKind, XmlOptions, read_xml, read_xml_files, sniff_xml};

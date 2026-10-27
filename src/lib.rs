@@ -1075,4 +1075,137 @@ mod _core {
         out.set_item("n_family_haplotypes", cmp.n_family_haplotypes)?;
         Ok(out)
     }
+
+    // ------------------------------------------------------------ statistics
+
+    /// Hardy–Weinberg statistics per locus: list of dicts with n (people tested), untyped,
+    /// half_typed, ambiguous, homozygous_filled, alleles, observed_heterozygosity,
+    /// expected_heterozygosity, f and p_value (exact test from `permutations` random tables).
+    #[pyfunction]
+    #[pyo3(signature = (dataset, nomenclature, resolutions=None, *, permutations=10_000, seed=0, threads=None))]
+    fn hardy_weinberg<'py>(
+        py: Python<'py>,
+        dataset: &Dataset,
+        nomenclature: &Nomenclature,
+        resolutions: Option<&Bound<'_, PyAny>>,
+        permutations: usize,
+        seed: u64,
+        threads: Option<usize>,
+    ) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let res = resolutions_or_g(&dataset.inner.loci, resolutions)?;
+        let opts = hh::HweOptions { permutations, seed };
+        let (ds, nom) = (&dataset.inner, &nomenclature.inner);
+        let rows = run_detached(py, threads, || hh::hardy_weinberg(ds, nom, &res, &opts))?;
+        rows.into_iter()
+            .map(|r| {
+                let d = PyDict::new(py);
+                d.set_item("locus", r.locus)?;
+                d.set_item("n", r.n)?;
+                d.set_item("untyped", r.untyped)?;
+                d.set_item("half_typed", r.half_typed)?;
+                d.set_item("ambiguous", r.ambiguous)?;
+                d.set_item("homozygous_filled", r.homozygous_filled)?;
+                d.set_item("alleles", r.alleles)?;
+                d.set_item("observed_heterozygosity", r.observed_heterozygosity)?;
+                d.set_item("expected_heterozygosity", r.expected_heterozygosity)?;
+                d.set_item("f", r.f)?;
+                d.set_item("p_value", r.p_value)?;
+                d.set_item("permutations", r.permutations)?;
+                Ok(d)
+            })
+            .collect()
+    }
+
+    /// Linkage disequilibrium for pairs of loci (default: every pair), from two-locus EM
+    /// estimates. List of dicts with locus_a, locus_b, n, alleles_a, alleles_b, d_prime, wn,
+    /// chi2, df, p_value (permutation test; None unless `permutations` > 0) and pairs (per allele pair: allele_a, allele_b, haplotype_frequency,
+    /// frequency_a, frequency_b, d, d_prime).
+    #[pyfunction]
+    #[pyo3(signature = (
+        dataset, nomenclature, resolutions=None, pairs=None, *, epsilon=1e-6, max_iterations=100_000,
+        seed=0, min_genotype_frequency=1e-5, max_completions=10_000, threads=None, starts=10,
+        completion="linked", permutations=0
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn linkage_disequilibrium<'py>(
+        py: Python<'py>,
+        dataset: &Dataset,
+        nomenclature: &Nomenclature,
+        resolutions: Option<&Bound<'_, PyAny>>,
+        pairs: Option<Vec<(String, String)>>,
+        epsilon: f64,
+        max_iterations: usize,
+        seed: u64,
+        min_genotype_frequency: f64,
+        max_completions: usize,
+        threads: Option<usize>,
+        starts: usize,
+        completion: &str,
+        permutations: usize,
+    ) -> PyResult<Vec<Bound<'py, PyDict>>> {
+        let loci = &dataset.inner.loci;
+        let res = resolutions_or_g(loci, resolutions)?;
+        let index = |l: &str| {
+            loci.iter()
+                .position(|x| x == l)
+                .ok_or_else(|| PyValueError::new_err(format!("locus {l} is not in the dataset")))
+        };
+        let idx: Vec<(usize, usize)> = match pairs {
+            Some(p) => p
+                .iter()
+                .map(|(a, b)| Ok((index(a)?, index(b)?)))
+                .collect::<PyResult<_>>()?,
+            None => (0..loci.len())
+                .flat_map(|i| (i + 1..loci.len()).map(move |j| (i, j)))
+                .collect(),
+        };
+        let opts = em_options(
+            epsilon,
+            max_iterations,
+            "numberOccurrence",
+            seed,
+            min_genotype_frequency,
+            max_completions,
+            completion,
+            starts,
+            false,
+        )?;
+        let (ds, nom) = (&dataset.inner, &nomenclature.inner);
+        let rows = run_detached(py, threads, || {
+            hh::linkage_disequilibrium(ds, nom, &res, &idx, &opts, permutations, seed)
+        })?;
+        rows.into_iter()
+            .map(|r| {
+                let d = PyDict::new(py);
+                d.set_item("locus_a", r.locus_a)?;
+                d.set_item("locus_b", r.locus_b)?;
+                d.set_item("n", r.n)?;
+                d.set_item("alleles_a", r.alleles_a)?;
+                d.set_item("alleles_b", r.alleles_b)?;
+                d.set_item("d_prime", r.d_prime)?;
+                d.set_item("wn", r.wn)?;
+                d.set_item("chi2", r.chi2)?;
+                d.set_item("df", r.df)?;
+                d.set_item("p_value", r.p_value)?;
+                d.set_item("permutations", r.permutations)?;
+                let pairs: Vec<Bound<'py, PyDict>> = r
+                    .pairs
+                    .into_iter()
+                    .map(|p| {
+                        let e = PyDict::new(py);
+                        e.set_item("allele_a", p.allele_a)?;
+                        e.set_item("allele_b", p.allele_b)?;
+                        e.set_item("haplotype_frequency", p.haplotype_frequency)?;
+                        e.set_item("frequency_a", p.frequency_a)?;
+                        e.set_item("frequency_b", p.frequency_b)?;
+                        e.set_item("d", p.d)?;
+                        e.set_item("d_prime", p.d_prime)?;
+                        Ok(e)
+                    })
+                    .collect::<PyResult<_>>()?;
+                d.set_item("pairs", pairs)?;
+                Ok(d)
+            })
+            .collect()
+    }
 }

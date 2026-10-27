@@ -112,6 +112,31 @@ def read_ngsengine(
     include_unapproved: bool = False,
 ) -> Dataset: ...
 def sniff_xml(path: StrPath) -> str | None: ...
+def hardy_weinberg(
+    dataset: Dataset,
+    nomenclature: Nomenclature,
+    resolutions: str | list[str] | dict[str, str] | None = None,
+    *,
+    permutations: int = 10_000,
+    seed: int = 0,
+    threads: int | None = None,
+) -> list[dict]: ...
+def linkage_disequilibrium(
+    dataset: Dataset,
+    nomenclature: Nomenclature,
+    resolutions: str | list[str] | dict[str, str] | None = None,
+    pairs: list[tuple[str, str]] | None = None,
+    *,
+    epsilon: float = 1e-6,
+    max_iterations: int = 100_000,
+    seed: int = 0,
+    min_genotype_frequency: float = 1e-5,
+    max_completions: int = 10_000,
+    threads: int | None = None,
+    starts: int = 10,
+    completion: str = "linked",
+    permutations: int = 0,
+) -> list[dict]: ...
 def classify_typing(typing: str) -> str | None: ...
 def estimate(
     dataset: Dataset,
