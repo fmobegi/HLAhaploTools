@@ -7,5 +7,6 @@ repository = "https://github.com/fmobegi/HLAhaploTools"
 description = "Pure-Rust core of hlahaplotools: HLA typing parsers, allele encoding and EM."
 
 [dependencies]
+quick-xml = "0.42"
 rayon = "1.12.0"
 rustc-hash = "2"

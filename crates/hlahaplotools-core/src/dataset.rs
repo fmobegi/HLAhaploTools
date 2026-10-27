@@ -81,6 +81,9 @@ pub struct Dataset {
     pub alleles: AlleleTable,
     /// Lines that could not be read.
     pub issues: Vec<Issue>,
+    /// Loci the reader left untyped on purpose (e.g. results not approved in
+    /// an NGSengine export); the samples themselves are kept.
+    pub notes: Vec<Issue>,
     /// Single alleles read as homozygous by [`crate::fill_dataset`].
     pub copied: Vec<CopiedAllele>,
 }

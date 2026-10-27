@@ -32,8 +32,12 @@ from hlahaplotools._core import (
     estimate_families,
     phase_families,
     read_family_table,
+    read_gls,
     read_glsc,
+    read_hml,
     read_mac,
+    read_ngsengine,
+    sniff_xml,
 )
 from hlahaplotools.cli import main
 from hlahaplotools.multistart import estimate_multistart
@@ -56,5 +60,9 @@ __all__ = [
     "phase_families",
     "read_family_table",
     "read_glsc",
+    "read_gls",
+    "read_hml",
     "read_mac",
+    "read_ngsengine",
+    "sniff_xml",
 ]

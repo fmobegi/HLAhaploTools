@@ -19,6 +19,8 @@ class Dataset:
     def alleles(self) -> list[str]: ...
     @property
     def issues(self) -> list[tuple[int, str | None, str]]: ...
+    @property
+    def notes(self) -> list[tuple[int, str | None, str]]: ...
     def sample(self, index: int) -> dict[str, str | None]: ...
     def missing_counts(self) -> dict[str, int]: ...
     def one_allele_counts(self) -> dict[str, int]: ...
@@ -83,6 +85,33 @@ def read_glsc(
     half_typed: str = "homozygous",
     drb345: bool = True,
 ) -> Dataset: ...
+def read_gls(
+    pull: StrPath,
+    glid: StrPath,
+    mac_codes: MacCodes | StrPath | None = None,
+    loci: list[str] | None = None,
+    *,
+    half_typed: str = "homozygous",
+    drb345: bool = True,
+) -> Dataset: ...
+def read_hml(
+    paths: StrPath | list[StrPath],
+    mac_codes: MacCodes | StrPath | None = None,
+    loci: list[str] | None = None,
+    *,
+    half_typed: str = "homozygous",
+    drb345: bool = True,
+) -> Dataset: ...
+def read_ngsengine(
+    paths: StrPath | list[StrPath],
+    mac_codes: MacCodes | StrPath | None = None,
+    loci: list[str] | None = None,
+    *,
+    half_typed: str = "homozygous",
+    drb345: bool = True,
+    include_unapproved: bool = False,
+) -> Dataset: ...
+def sniff_xml(path: StrPath) -> str | None: ...
 def classify_typing(typing: str) -> str | None: ...
 def estimate(
     dataset: Dataset,

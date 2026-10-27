@@ -28,7 +28,53 @@ ROOT = Path(__file__).resolve().parent.parent
 HAPLOMAT = ROOT / "reference" / "Hapl-o-Mat"
 
 
-def write_parameters(path: Path, fmt: str, input_file: Path, loci: str, epsilon: float, init: str) -> None:
+def gls_loci_order(pull: Path, glid: Path) -> str:
+    """Hapl-o-Mat's LOCIORDER: the locus of each pull-file column, read from the GLID file."""
+    locus_of = {}
+    for line in glid.read_text().splitlines():
+        if ";" in line:
+            n, gl = line.split(";", 1)
+            locus_of[n.strip()] = gl.strip().replace("HLA-", "").split("*")[0]
+    order: list[str | None] = []
+    for line in pull.read_text().splitlines():
+        if ";" not in line:
+            continue
+        ids = line.split(";", 1)[1].split(":")
+        order += [None] * (len(ids) - len(order))
+        for k, n in enumerate(ids):
+            if order[k] is None and n.strip() not in ("", "0"):
+                order[k] = locus_of.get(n.strip())
+        if all(order):
+            break
+    return ",".join(o or "?" for o in order)
+
+
+def write_parameters(
+    path: Path, fmt: str, input_file: Path, loci: str, epsilon: float, init: str, glid: Path | None = None
+) -> None:
+    if fmt == "GLS":
+        lines = [
+            f"FILENAME_PULL={input_file}",
+            f"FILENAME_GLID={glid}",
+            "FILENAME_HAPLOTYPES=results/haplotypes.dat",
+            "FILENAME_GENOTYPES=results/genotypes.dat",
+            "FILENAME_HAPLOTYPEFREQUENCIES=results/hfs.dat",
+            "FILENAME_EPSILON_LOGL=results/epsilon.dat",
+            f"LOCIORDER={gls_loci_order(input_file, glid)}",
+            f"LOCI_AND_RESOLUTIONS={loci}",
+            "MINIMAL_FREQUENCY_GENOTYPES=1e-5",
+            "DO_AMBIGUITYFILTER=false",
+            "EXPAND_LINES_AMBIGUITYFILTER=false",
+            "RESOLVE_MISSING_GENOTYPES=false",
+            "WRITE_GENOTYPES=false",
+            f"INITIALIZATION_HAPLOTYPEFREQUENCIES={init}",
+            f"EPSILON={epsilon}",
+            "CUT_HAPLOTYPEFREQUENCIES=1e-6",
+            "RENORMALIZE_HAPLOTYPEFREQUENCIES=true",
+            "SEED=0",
+        ]
+        path.write_text("\n".join(lines) + "\n")
+        return
     lines = [
         f"FILENAME_INPUT={input_file}",
         "FILENAME_HAPLOTYPES=results/haplotypes.dat",
@@ -68,8 +114,9 @@ def read_hfs(path: Path) -> dict[str, float]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("format", choices=["MAC", "GLSC"])
-    ap.add_argument("input", type=Path)
+    ap.add_argument("format", choices=["MAC", "GLSC", "GLS"])
+    ap.add_argument("input", type=Path, help="MAC/GLSC file, or the GLS pull file")
+    ap.add_argument("--glid", type=Path, help="GLS: GLID file (default: the pull file with a .glid suffix)")
     ap.add_argument("--loci", required=True, help="LOCI_AND_RESOLUTIONS, e.g. A:g,B:g,DRB1:1f")
     ap.add_argument("--epsilon", type=float, default=1e-6)
     ap.add_argument("--init", default="numberOccurrence")
@@ -82,12 +129,15 @@ def main() -> int:
         sys.exit(f"error: {binary} not found; run `make` in {HAPLOMAT}")
     work = Path(tempfile.mkdtemp(prefix="hh_compare_"))
     input_file = args.input.resolve()
+    glid = (args.glid or args.input.with_suffix(".glid")).resolve() if args.format == "GLS" else None
 
     # C++: needs ./data, ./parametersMAC|GLSC and ./results in its working folder.
     cpp = work / "cpp"
     (cpp / "results").mkdir(parents=True)
     os.symlink(HAPLOMAT / "data", cpp / "data")
-    write_parameters(cpp / f"parameters{args.format}", args.format, input_file, args.loci, args.epsilon, args.init)
+    write_parameters(
+        cpp / f"parameters{args.format}", args.format, input_file, args.loci, args.epsilon, args.init, glid
+    )
     t = time.perf_counter()
     run = subprocess.run([str(binary), args.format], cwd=cpp, capture_output=True, text=True)
     cpp_seconds = time.perf_counter() - t
@@ -99,7 +149,7 @@ def main() -> int:
     # Ours: same parameter file, same data tables.
     ours = work / "ours"
     (ours / "results").mkdir(parents=True)
-    write_parameters(ours / "params", args.format, input_file, args.loci, args.epsilon, args.init)
+    write_parameters(ours / "params", args.format, input_file, args.loci, args.epsilon, args.init, glid)
     t = time.perf_counter()
     run2 = subprocess.run(
         [

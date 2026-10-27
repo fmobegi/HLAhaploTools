@@ -146,6 +146,13 @@ mod _core {
             issues_to_py(&self.inner.issues)
         }
 
+        /// Loci left untyped on purpose while reading (e.g. NGSengine results
+        /// not approved), as (0, sample id, reason). The samples are kept.
+        #[getter]
+        fn notes(&self) -> Vec<(usize, Option<String>, String)> {
+            issues_to_py(&self.inner.notes)
+        }
+
         /// One sample as {locus: GL string or None}.
         fn sample<'py>(&self, py: Python<'py>, index: isize) -> PyResult<Bound<'py, PyDict>> {
             let n = self.inner.samples.len() as isize;
@@ -195,7 +202,7 @@ mod _core {
     /// Run `read` with the MAC table given as a loaded MacCodes or a path to
     /// alpha.v3.txt; with a path, only the codes used in `path` are loaded.
     fn with_mac<T>(
-        path: &PathBuf,
+        paths: &[PathBuf],
         mac_codes: Option<&Bound<'_, PyAny>>,
         read: impl FnOnce(Option<&hh::MacDictionary>) -> Result<T, hh::Error>,
     ) -> PyResult<T> {
@@ -206,7 +213,10 @@ mod _core {
                 Ok(m) => Some(&m.get().inner),
                 Err(_) => {
                     let mac_path: PathBuf = obj.extract()?;
-                    let wanted = hh::collect_mac_codes_in_file(path).map_err(to_py_err)?;
+                    let mut wanted = HashSet::new();
+                    for path in paths {
+                        wanted.extend(hh::collect_mac_codes_in_file(path).map_err(to_py_err)?);
+                    }
                     if wanted.is_empty() {
                         None // no MAC codes in the input: skip scanning the big table
                     } else {
@@ -228,11 +238,19 @@ mod _core {
         fill: hh::FillOptions,
         reader: fn(&PathBuf, &hh::ParseOptions) -> Result<hh::Dataset, hh::Error>,
     ) -> PyResult<Dataset> {
-        let mut ds = with_mac(&path, mac_codes, |mac| {
+        let mut ds = with_mac(std::slice::from_ref(&path), mac_codes, |mac| {
             reader(&path, &hh::ParseOptions { loci, mac })
         })?;
         let fills = hh::fill_dataset(&mut ds, &fill);
         Ok(Dataset { inner: ds, fills })
+    }
+
+    /// One path or a list of paths.
+    fn path_list(paths: &Bound<'_, PyAny>) -> PyResult<Vec<PathBuf>> {
+        match paths.extract::<PathBuf>() {
+            Ok(p) => Ok(vec![p]),
+            Err(_) => paths.extract::<Vec<PathBuf>>(),
+        }
     }
 
     /// Read a MAC table (tab-separated, two columns per locus).
@@ -265,6 +283,92 @@ mod _core {
     ) -> PyResult<Dataset> {
         let fill = fill_options(half_typed, drb345)?;
         read_with(path, mac_codes, loci, fill, |p, o| hh::read_glsc_file(p, o))
+    }
+
+    /// Read Hapl-o-Mat's GLS input: a pull file (`sample;glid:glid:...`) and a
+    /// GLID file (`glid;GL string`). GL ID 0 is read as untyped.
+    #[pyfunction]
+    #[pyo3(signature = (pull, glid, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true))]
+    fn read_gls(
+        pull: PathBuf,
+        glid: PathBuf,
+        mac_codes: Option<&Bound<'_, PyAny>>,
+        loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
+    ) -> PyResult<Dataset> {
+        let fill = fill_options(half_typed, drb345)?;
+        // MAC codes live in the GLID file.
+        let mut ds = with_mac(std::slice::from_ref(&glid), mac_codes, |mac| {
+            hh::read_gls_files(&pull, &glid, &hh::ParseOptions { loci, mac })
+        })?;
+        let fills = hh::fill_dataset(&mut ds, &fill);
+        Ok(Dataset { inner: ds, fills })
+    }
+
+    fn read_xml_with(
+        paths: &Bound<'_, PyAny>,
+        kind: hh::XmlKind,
+        xml: hh::XmlOptions,
+        mac_codes: Option<&Bound<'_, PyAny>>,
+        loci: Option<Vec<String>>,
+        fill: hh::FillOptions,
+    ) -> PyResult<Dataset> {
+        let paths = path_list(paths)?;
+        let mut ds = with_mac(&paths, mac_codes, |mac| {
+            hh::read_xml_files(&paths, kind, &xml, &hh::ParseOptions { loci, mac })
+        })?;
+        let fills = hh::fill_dataset(&mut ds, &fill);
+        Ok(Dataset { inner: ds, fills })
+    }
+
+    /// Read NMDP HML files (one path or a list, e.g. one file per sample).
+    /// Each allele assignment's GL string is read with its ambiguity.
+    #[pyfunction]
+    #[pyo3(signature = (paths, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true))]
+    fn read_hml(
+        paths: &Bound<'_, PyAny>,
+        mac_codes: Option<&Bound<'_, PyAny>>,
+        loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
+    ) -> PyResult<Dataset> {
+        let fill = fill_options(half_typed, drb345)?;
+        read_xml_with(
+            paths,
+            hh::XmlKind::Hml,
+            hh::XmlOptions::default(),
+            mac_codes,
+            loci,
+            fill,
+        )
+    }
+
+    /// Read GenDx NGSengine XML exports (one path or a list). The reviewed
+    /// (conclusive) result of each locus is used; loci not approved are left
+    /// untyped and listed in `Dataset.notes`, unless `include_unapproved`.
+    #[pyfunction]
+    #[pyo3(signature = (paths, mac_codes=None, loci=None, *, half_typed="homozygous", drb345=true, include_unapproved=false))]
+    fn read_ngsengine(
+        paths: &Bound<'_, PyAny>,
+        mac_codes: Option<&Bound<'_, PyAny>>,
+        loci: Option<Vec<String>>,
+        half_typed: &str,
+        drb345: bool,
+        include_unapproved: bool,
+    ) -> PyResult<Dataset> {
+        let fill = fill_options(half_typed, drb345)?;
+        let xml = hh::XmlOptions { include_unapproved };
+        read_xml_with(paths, hh::XmlKind::NgsEngine, xml, mac_codes, loci, fill)
+    }
+
+    /// "hml", "ngsengine" or None, from the start of an XML file.
+    #[pyfunction]
+    fn sniff_xml(path: PathBuf) -> PyResult<Option<&'static str>> {
+        Ok(hh::sniff_xml(path).map_err(to_py_err)?.map(|k| match k {
+            hh::XmlKind::Hml => "hml",
+            hh::XmlKind::NgsEngine => "ngsengine",
+        }))
     }
 
     /// Classify one typing (without locus prefix), e.g. "24:DXTW" -> "mac".
@@ -696,7 +800,7 @@ mod _core {
         drb345: bool,
     ) -> PyResult<FamilyData> {
         let fill = fill_options(half_typed, drb345)?;
-        let (mut ds, ped) = with_mac(&path, mac_codes, |mac| {
+        let (mut ds, ped) = with_mac(std::slice::from_ref(&path), mac_codes, |mac| {
             hh::read_family_table(&path, &hh::ParseOptions { loci, mac })
         })?;
         let fills = hh::fill_dataset(&mut ds, &fill);

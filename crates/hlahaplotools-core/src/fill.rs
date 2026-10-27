@@ -156,8 +156,10 @@ pub fn fill_dataset(ds: &mut Dataset, opts: &FillOptions) -> Vec<FillCount> {
 
         // 2. DRB3/4/5 from DRB1: how many copies of each gene does DRB1 imply?
         let d = drb1.unwrap();
+        // Every alternative DRB1 genotype (high-resolution NGS reports list
+        // several that differ only in later fields) must imply the same copies.
         let expected: Option<[usize; 3]> = match &ds.samples[s].loci[d] {
-            LocusObs::Genotypes(list) if list.len() == 1 => {
+            LocusObs::Genotypes(list) if !list.is_empty() => {
                 let side = |ids: &[AlleleId]| -> Option<Option<&'static str>> {
                     let mut partners = ids
                         .iter()
@@ -166,20 +168,20 @@ pub fn fill_dataset(ds: &mut Dataset, opts: &FillOptions) -> Vec<FillCount> {
                     // All candidates must agree on the partner gene.
                     partners.all(|p| p == Some(first)).then_some(first)
                 };
-                let (l, r) = &list[0];
-                match (side(l), side(r)) {
-                    (Some(a), Some(b)) => {
-                        let mut e = [0usize; 3];
-                        for g in [a, b].into_iter().flatten() {
-                            e[["DRB3", "DRB4", "DRB5"]
-                                .iter()
-                                .position(|x| *x == g)
-                                .unwrap()] += 1;
-                        }
-                        Some(e)
+                let copies = |(l, r): &(Vec<AlleleId>, Vec<AlleleId>)| -> Option<[usize; 3]> {
+                    let (a, b) = (side(l)?, side(r)?);
+                    let mut e = [0usize; 3];
+                    for g in [a, b].into_iter().flatten() {
+                        e[["DRB3", "DRB4", "DRB5"]
+                            .iter()
+                            .position(|x| *x == g)
+                            .unwrap()] += 1;
                     }
-                    _ => None, // DRB1 ambiguous across groups: leave DRB3/4/5 as typed
-                }
+                    Some(e)
+                };
+                let first = copies(&list[0]);
+                // DRB1 ambiguous across groups: leave DRB3/4/5 as typed.
+                first.filter(|e| list[1..].iter().all(|g| copies(g).as_ref() == Some(e)))
             }
             _ => None,
         };
@@ -327,6 +329,21 @@ mod tests {
         let (drb3, drb4) = (&counts[1], &counts[2]);
         assert_eq!((drb3.duplicate_read_as_one, drb3.drb1_conflicts), (1, 1));
         assert_eq!((drb4.duplicate_read_as_one, drb4.drb1_conflicts), (0, 1));
+    }
+
+    #[test]
+    fn drb345_rules_use_ambiguous_drb1_when_groups_agree() {
+        // NGS reports: several DRB1 genotypes differing only in later fields.
+        let input = "s1 DRB1*01:02:01:01+DRB1*03:01:01:01|DRB1*01:02:01:01+DRB1*03:01:01:05 DRB3*01:01:02:01|DRB3*01:01:02:02\n\
+                     s2 DRB1*03:01+DRB1*04:01|DRB1*03:01+DRB1*15:01 DRB3*01:01\n";
+        let mut ds =
+            crate::parse::read_glsc(input.as_bytes(), &crate::parse::ParseOptions::default())
+                .unwrap();
+        fill_dataset(&mut ds, &FillOptions::default());
+        let gl = |s: usize| ds.samples[s].loci[1].to_gl(&ds.alleles);
+        assert_eq!(gl(0), "DRB3*01:01:02:01/DRB3*01:01:02:02+DRB3*NNNN");
+        // DRB1 alternatives disagree on DR51/DR53: DRB3 left as typed.
+        assert_eq!(gl(1), "DRB3*01:01+");
     }
 
     #[test]

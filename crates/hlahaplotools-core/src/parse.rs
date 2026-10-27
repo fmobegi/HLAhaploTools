@@ -274,6 +274,7 @@ pub fn read_mac<R: BufRead>(reader: R, opts: &ParseOptions) -> Result<Dataset, E
         samples,
         alleles: resolver.table,
         issues,
+        notes: Vec::new(),
         copied: Vec::new(),
     })
 }
@@ -312,21 +313,83 @@ pub fn read_mac_file(path: impl AsRef<Path>, opts: &ParseOptions) -> Result<Data
 // --------------------------------------------------------------- GLSC format
 
 pub fn read_glsc<R: BufRead>(reader: R, opts: &ParseOptions) -> Result<Dataset, Error> {
-    let mut rows: Vec<(usize, String)> = Vec::new();
+    let mut records = Vec::new();
     for (i, line) in reader.lines().enumerate() {
         let line = line?;
         let line = line.trim_start_matches('\u{feff}').trim();
-        if !line.is_empty() {
-            rows.push((i + 1, line.to_owned()));
+        if line.is_empty() {
+            continue;
         }
+        let mut fields = line.split_whitespace();
+        let id = fields.next().unwrap_or_default().to_owned();
+        records.push(GlRecord {
+            line: i + 1,
+            id,
+            fields: fields.map(str::to_owned).collect(),
+        });
+    }
+    Ok(dataset_from_gl(records, Vec::new(), Vec::new(), opts))
+}
+
+/// One sample as GL strings, from any GL-based format (GLSC, GLS, HML, NGSengine).
+#[derive(Debug, Clone)]
+pub(crate) struct GlRecord {
+    /// 1-based line in the input (0 when the format has no useful line number).
+    pub line: usize,
+    pub id: String,
+    /// GL strings, one or more loci each (`^` joins loci; `HLA-` prefixes allowed).
+    pub fields: Vec<String>,
+}
+
+/// Tidy a GL string as written in HML or vendor exports: drop whitespace and
+/// `HLA-` prefixes, and split `^`-joined loci into one string per locus.
+pub(crate) fn normalise_gl(gl: &str) -> Result<Vec<String>, String> {
+    let compact: String = gl.chars().filter(|c| !c.is_whitespace()).collect();
+    let compact = compact.replace("HLA-", "");
+    if compact.contains('~') {
+        return Err(format!(
+            "phased GL string {compact} ('~') is not supported; give each locus separately"
+        ));
+    }
+    Ok(compact
+        .split('^')
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// Build a dataset from GL-string records. `issues` are records already
+/// rejected by the reader; `notes` are loci a reader left untyped on purpose.
+pub(crate) fn dataset_from_gl(
+    records: Vec<GlRecord>,
+    mut issues: Vec<Issue>,
+    notes: Vec<Issue>,
+    opts: &ParseOptions,
+) -> Dataset {
+    // Normalise every field first, so locus names are known.
+    let mut rows: Vec<(usize, String, Result<Vec<String>, String>)> =
+        Vec::with_capacity(records.len());
+    for r in records {
+        let mut fields = Vec::with_capacity(r.fields.len());
+        let mut err = None;
+        for f in &r.fields {
+            match normalise_gl(f) {
+                Ok(parts) => fields.extend(parts),
+                Err(e) => {
+                    err = Some(e);
+                    break;
+                }
+            }
+        }
+        rows.push((r.line, r.id, err.map_or(Ok(fields), Err)));
     }
 
     let loci: Vec<String> = match &opts.loci {
         Some(l) => l.clone(),
         None => {
             let mut seen = BTreeSet::new();
-            for (_, row) in &rows {
-                for field in row.split_whitespace().skip(1) {
+            for (_, _, fields) in &rows {
+                for field in fields.iter().flatten() {
                     if let Some((locus, _)) = field.split_once('*') {
                         seen.insert(locus.to_owned());
                     }
@@ -346,49 +409,140 @@ pub fn read_glsc<R: BufRead>(reader: R, opts: &ParseOptions) -> Result<Dataset, 
         table: AlleleTable::new(),
     };
     let mut samples = Vec::new();
-    let mut issues = Vec::new();
 
-    for (line_no, row) in &rows {
-        let mut fields = row.split_whitespace();
-        let id = fields.next().unwrap_or_default().to_owned();
+    for (line_no, id, fields) in rows {
         let mut obs = vec![LocusObs::Missing; loci.len()];
         let mut seen = vec![false; loci.len()];
 
-        let result: Result<(), String> = fields.try_for_each(|field| {
-            let (locus, _) = field
-                .split_once('*')
-                .ok_or_else(|| format!("GL string {field} has no locus prefix"))?;
-            let Some(&k) = locus_pos.get(locus) else {
-                return Ok(()); // locus not requested
-            };
-            if std::mem::replace(&mut seen[k], true) {
-                return Err(format!("locus {locus} appears twice"));
-            }
-            obs[k] = glsc_locus(&mut resolver, locus_index(k), locus, field)?;
-            Ok(())
+        let result: Result<(), String> = fields.and_then(|fields| {
+            fields.iter().try_for_each(|field| {
+                let (locus, _) = field
+                    .split_once('*')
+                    .ok_or_else(|| format!("GL string {field} has no locus prefix"))?;
+                let Some(&k) = locus_pos.get(locus) else {
+                    return Ok(()); // locus not requested
+                };
+                if std::mem::replace(&mut seen[k], true) {
+                    return Err(format!("locus {locus} appears twice"));
+                }
+                obs[k] = glsc_locus(&mut resolver, locus_index(k), locus, field)?;
+                Ok(())
+            })
         });
 
         match result {
             Ok(()) => samples.push(Sample { id, loci: obs }),
             Err(message) => issues.push(Issue {
-                line: *line_no,
+                line: line_no,
                 sample_id: Some(id),
                 message,
             }),
         }
     }
 
-    Ok(Dataset {
+    Dataset {
         loci,
         samples,
         alleles: resolver.table,
         issues,
+        notes,
         copied: Vec::new(),
-    })
+    }
+}
+
+// ---------------------------------------------------------------- GLS format
+
+/// Read Hapl-o-Mat's GLS input: a pull file (`sample;glid:glid:...`, one GL ID
+/// per locus) and a GLID file (`glid;GL string`). GL ID `0` means the locus
+/// was not typed; it is kept as missing, not dropped.
+///
+/// Hapl-o-Mat's `LOCIORDER` is not needed: each GL string names its locus.
+pub fn read_gls<P: BufRead, G: BufRead>(
+    pull: P,
+    glid: G,
+    opts: &ParseOptions,
+) -> Result<Dataset, Error> {
+    let mut gls: HashMap<u64, String> = HashMap::new();
+    for (i, line) in glid.lines().enumerate() {
+        let line = line?;
+        let line = line.trim_start_matches('\u{feff}').trim();
+        if line.is_empty() {
+            continue;
+        }
+        let (n, gl) = line.split_once(';').ok_or_else(|| {
+            Error::Format(format!("GLID file line {}: expected `id;GL string`", i + 1))
+        })?;
+        let n: u64 = n.trim().parse().map_err(|_| {
+            Error::Format(format!("GLID file line {}: {n:?} is not a GL ID", i + 1))
+        })?;
+        gls.insert(n, gl.trim().to_owned());
+    }
+
+    let mut records = Vec::new();
+    let mut issues = Vec::new();
+    for (i, line) in pull.lines().enumerate() {
+        let line = line?;
+        let line = line.trim_start_matches('\u{feff}').trim();
+        if line.is_empty() {
+            continue;
+        }
+        let (id, ids) = line.split_once(';').unwrap_or((line, ""));
+        let id = id.trim().to_owned();
+        let mut fields = Vec::new();
+        let mut err = None;
+        for n in ids.split(':').map(str::trim).filter(|s| !s.is_empty()) {
+            match n.parse::<u64>() {
+                Ok(0) => {} // not typed
+                Ok(n) => match gls.get(&n) {
+                    Some(gl) => fields.push(gl.clone()),
+                    None => {
+                        err = Some(format!("GL ID {n} is not in the GLID file"));
+                        break;
+                    }
+                },
+                Err(_) => {
+                    err = Some(format!("{n:?} is not a GL ID"));
+                    break;
+                }
+            }
+        }
+        match err {
+            None => records.push(GlRecord {
+                line: i + 1,
+                id,
+                fields,
+            }),
+            Some(message) => issues.push(Issue {
+                line: i + 1,
+                sample_id: Some(id),
+                message,
+            }),
+        }
+    }
+    Ok(dataset_from_gl(records, issues, Vec::new(), opts))
+}
+
+pub fn read_gls_files(
+    pull: impl AsRef<Path>,
+    glid: impl AsRef<Path>,
+    opts: &ParseOptions,
+) -> Result<Dataset, Error> {
+    read_gls(
+        BufReader::with_capacity(1 << 20, File::open(pull)?),
+        BufReader::with_capacity(1 << 20, File::open(glid)?),
+        opts,
+    )
 }
 
 /// Parse one locus GL string, e.g. `A*01:01+A*02:01/A*02:02|A*03:01+A*11:01`.
 fn glsc_locus(r: &mut Resolver, k: u16, locus: &str, gl: &str) -> Result<LocusObs, String> {
+    // No `+` at all (`DRB4*01:01:01G`, `DRB3*01:01|DRB3*01:02`): one allele
+    // reported, as labs often do for DRB3/4/5 carried on one chromosome. The
+    // alternatives become candidates for that allele; filling decides the rest.
+    if !gl.contains('+') {
+        let list = gl.replace('|', "/");
+        return Ok(LocusObs::OneAllele(r.resolve_list(k, locus, &list)?));
+    }
     let genotypes: Vec<&str> = gl.split('|').collect();
     let mut out = Vec::with_capacity(genotypes.len());
     for genotype in &genotypes {
@@ -699,6 +853,7 @@ pub fn read_table<R: BufRead>(
             samples,
             alleles: resolver.table,
             issues,
+            notes: Vec::new(),
             copied: Vec::new(),
         },
         ids,
@@ -868,5 +1023,37 @@ mod tests {
         };
         let ds = read_glsc(input.as_bytes(), &opts).unwrap();
         assert_eq!(ds.samples[0].loci[1], LocusObs::Missing);
+    }
+
+    #[test]
+    fn gls_pull_and_glid_with_untyped_loci() {
+        let glid = "1;A*01:01+A*02:01\n2;B*08:01+B*07:02/B*07:03\n3;HLA-A*03:01+HLA-A*11:01\n";
+        let pull = "s1;1:2\ns2;3:0\ns3;1:9\n";
+        let ds = read_gls(pull.as_bytes(), glid.as_bytes(), &ParseOptions::default()).unwrap();
+        assert_eq!(ds.loci, ["A", "B"]);
+        assert_eq!(ds.samples.len(), 2);
+        assert_eq!(gl(&ds, 0, 1), "B*08:01+B*07:02/B*07:03");
+        // GL ID 0: untyped, not dropped; HLA- prefixes are accepted.
+        assert_eq!(gl(&ds, 1, 0), "A*03:01+A*11:01");
+        assert!(ds.samples[1].loci[1].is_missing());
+        assert_eq!(ds.issues.len(), 1);
+        assert!(ds.issues[0].message.contains("GL ID 9"));
+    }
+
+    #[test]
+    fn single_allele_without_plus_is_one_allele_typed() {
+        let input = "s1 DRB4*01:01:01G DRB3*01:01|DRB3*01:02\n";
+        let ds = read_glsc(input.as_bytes(), &ParseOptions::default()).unwrap();
+        assert_eq!(ds.loci, ["DRB3", "DRB4"]);
+        assert_eq!(gl(&ds, 0, 0), "DRB3*01:01/DRB3*01:02+");
+        assert_eq!(gl(&ds, 0, 1), "DRB4*01:01:01G+");
+    }
+
+    #[test]
+    fn glsc_accepts_hla_prefix_and_joined_loci() {
+        let input = "s1 HLA-A*01:01+HLA-A*02:01^HLA-B*08:01+HLA-B*07:02\n";
+        let ds = read_glsc(input.as_bytes(), &ParseOptions::default()).unwrap();
+        assert_eq!(ds.loci, ["A", "B"]);
+        assert_eq!(gl(&ds, 0, 1), "B*08:01+B*07:02");
     }
 }

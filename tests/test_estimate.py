@@ -146,6 +146,7 @@ def test_cli_estimate_writes_outputs(tmp_path):
     [
         ("MAC", "populationData_a.dat", "A:g,B:g,DRB1:1f"),
         ("GLSC", "populationData_b.glc", "A:g,C:g,DPB1:g,DQB1:g,DRB1:P"),
+        ("GLS", "populationData_c.pull", "A:g,B:g,C:g,DQB1:g,DRB1:g"),
     ],
 )
 def test_matches_original_haplomat(fmt, data, loci):

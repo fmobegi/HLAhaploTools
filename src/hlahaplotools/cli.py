@@ -10,7 +10,15 @@ import time
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-from hlahaplotools._core import Nomenclature, read_glsc, read_mac
+from hlahaplotools._core import (
+    Nomenclature,
+    read_gls,
+    read_glsc,
+    read_hml,
+    read_mac,
+    read_ngsengine,
+    sniff_xml,
+)
 from hlahaplotools.multistart import estimate_multistart
 
 INITS = ["numberOccurrence", "perturbation", "equal", "random"]
@@ -58,6 +66,35 @@ def resolve_data_paths(args) -> tuple[Path, Path | None, dict]:
 # ---------------------------------------------------------------- running
 
 
+FORMATS = ["mac", "glsc", "gls", "hml", "ngsengine"]
+
+
+def xml_files(path: Path) -> list[Path]:
+    """A folder of XML reports (e.g. one HML file per sample), or one file."""
+    if path.is_dir():
+        files = sorted(p for p in path.iterdir() if p.suffix.lower() in (".hml", ".xml") and p.is_file())
+        if not files:
+            sys.exit(f"error: no .hml or .xml files in {path}")
+        return files
+    return [path]
+
+
+def guess_format(path: str) -> str:
+    """Input format from the extension, or from the content of XML files."""
+    p = Path(path)
+    low = p.name.lower()
+    if p.is_dir() or low.endswith((".hml", ".xml")):
+        kinds = {sniff_xml(str(f)) or ("hml" if f.suffix.lower() == ".hml" else None) for f in xml_files(p)}
+        if len(kinds) == 1 and None not in kinds:
+            return kinds.pop()
+        sys.exit(f"error: cannot tell the XML layout of {path} (found {sorted(map(str, kinds))}); pass --format")
+    if low.endswith(".pull"):
+        return "gls"
+    if low.endswith((".glc", ".glsc")):
+        return "glsc"
+    return "mac"
+
+
 def read_input(
     path: str,
     fmt: str | None,
@@ -65,11 +102,35 @@ def read_input(
     loci: list[str] | None,
     half_typed: str = "homozygous",
     drb345: bool = True,
+    glid: str | None = None,
+    include_unapproved: bool = False,
 ):
-    fmt = fmt or ("glsc" if path.lower().endswith((".glc", ".glsc")) else "mac")
-    reader = read_glsc if fmt == "glsc" else read_mac
+    fmt = fmt or guess_format(path)
     mac_codes = str(mac) if mac and mac.exists() else None
-    return reader(path, mac_codes=mac_codes, loci=loci, half_typed=half_typed, drb345=drb345), fmt
+    common = dict(mac_codes=mac_codes, loci=loci, half_typed=half_typed, drb345=drb345)
+    if fmt == "gls":
+        glid = glid or str(Path(path).with_suffix(".glid"))
+        if not Path(glid).exists():
+            sys.exit(f"error: GLS input needs a GLID file; {glid} not found (pass --glid)")
+        return read_gls(path, glid, **common), fmt
+    if fmt in ("hml", "ngsengine"):
+        files = [str(f) for f in xml_files(Path(path))]
+        if fmt == "hml":
+            return read_hml(files, **common), fmt
+        return read_ngsengine(files, include_unapproved=include_unapproved, **common), fmt
+    reader = read_glsc if fmt == "glsc" else read_mac
+    return reader(path, **common), fmt
+
+
+def describe_notes(notes: list, say, where: str | None = None) -> None:
+    """Print loci the reader left untyped on purpose (e.g. results not approved)."""
+    if not notes:
+        return
+    say(f"  {len(notes)} locus results left untyped while reading:")
+    for _, sid, reason in notes[:10]:
+        say(f"    {sid}: {reason}")
+    if len(notes) > 10:
+        say(f"    ... and {len(notes) - 10} more" + (f" (see {where})" if where else ""))
 
 
 def describe_fills(fills: dict, say) -> None:
@@ -112,15 +173,18 @@ def run_estimate(
     drb345: bool = True,
     starts: int = 1,
     completion: str = "linked",
+    glid: str | None = None,
+    include_unapproved: bool = False,
 ) -> int:
     say = (lambda *a: None) if quiet else print
     loci = [l for l, _ in loci_res]
     t0 = time.perf_counter()
-    ds, fmt = read_input(input_path, fmt, mac, loci, half_typed, drb345)
+    ds, fmt = read_input(input_path, fmt, mac, loci, half_typed, drb345, glid, include_unapproved)
     nom = Nomenclature(str(nom_dir))
     t1 = time.perf_counter()
     say(f"Read {len(ds)} samples from {input_path} ({fmt.upper()}); {len(ds.issues)} lines unreadable")
     describe_fills(ds.fill_counts(), say)
+    describe_notes(ds.notes, say, str(out_freqs.with_name("run.json")))
     missing, half = ds.missing_counts(), ds.one_allele_counts()
     for locus, res in loci_res:
         say(f"  {locus:6} -> {res:6} untyped: {missing[locus]:6}  one allele typed: {half[locus]:6}")
@@ -176,6 +240,7 @@ def run_estimate(
         "tool": "hlahaplotools",
         "version": _version(),
         "input": str(input_path),
+        **({"glid": glid or str(Path(input_path).with_suffix(".glid"))} if fmt == "gls" else {}),
         "format": fmt,
         "loci_and_resolutions": dict(loci_res),
         "imgthla_release": manifest.get("imgthla", {}).get("release") or nom.source,
@@ -214,6 +279,7 @@ def run_estimate(
             **{k: round(v, 3) for k, v in est.timings.items()},
         },
         "unreadable_lines": [{"line": l, "id": i, "reason": r} for l, i, r in ds.issues],
+        "loci_left_untyped": [{"id": i, "reason": r} for _, i, r in ds.notes],
         "samples_left_out": [{"id": i, "reason": r} for _, i, r in est.issues],
     }
     run_path = out_freqs.with_name("run.json")
@@ -297,6 +363,8 @@ def cmd_estimate(args) -> int:
         drb345=not args.no_drb345,
         starts=args.starts,
         completion=args.completion,
+        glid=args.glid,
+        include_unapproved=args.include_unapproved,
     )
 
 
@@ -311,8 +379,16 @@ def read_parameters(path: str) -> dict[str, str]:
 
 
 def cmd_haplomat(args) -> int:
-    """Run from a Hapl-o-Mat parameter file (MAC or GLSC)."""
+    """Run from a Hapl-o-Mat parameter file (MAC, GLSC or GLS)."""
     p = read_parameters(args.parameters)
+    fmt = args.format.lower()
+    if fmt == "gls":
+        input_path, glid = p["FILENAME_PULL"], p["FILENAME_GLID"]
+        # Untyped loci (GL ID 0) are always kept as untyped, so this switch has no effect here.
+        if p.get("RESOLVE_MISSING_GENOTYPES", "false").lower() == "true":
+            print("note: RESOLVE_MISSING_GENOTYPES ignored; untyped loci are always kept", file=sys.stderr)
+    else:
+        input_path, glid = p["FILENAME_INPUT"], None
     for key, what in [
         ("DO_AMBIGUITYFILTER", "the ambiguity filter"),
         ("WRITE_GENOTYPES", "writing genotypes"),
@@ -326,8 +402,9 @@ def cmd_haplomat(args) -> int:
     old = {"2d": "1f", "4d": "2f", "6d": "3f", "8d": "4f"}
     loci_res = sorted((l, old.get(r, r)) for l, r in parse_loci(p["LOCI_AND_RESOLUTIONS"]))
     return run_estimate(
-        input_path=p["FILENAME_INPUT"],
-        fmt=args.format.lower(),
+        input_path=input_path,
+        fmt=fmt,
+        glid=glid,
         loci_res=loci_res,
         nom_dir=nom,
         mac=mac,
@@ -355,9 +432,12 @@ def cmd_summary(args) -> int:
         folder, manifest = find_data(args.data_dir)
         mac = folder / "mac" / "alpha.v3.txt" if folder and "mac" in manifest else None
     loci = args.loci.split(",") if args.loci else None
-    ds, fmt = read_input(args.input, args.format, mac, loci, args.half_typed, not args.no_drb345)
+    ds, fmt = read_input(
+        args.input, args.format, mac, loci, args.half_typed, not args.no_drb345, args.glid, args.include_unapproved
+    )
     print(f"{ds!r} ({fmt.upper()})")
     describe_fills(ds.fill_counts(), print)
+    describe_notes(ds.notes, print)
     missing, half = ds.missing_counts(), ds.one_allele_counts()
     for locus in ds.loci:
         print(f"  {locus:6} untyped: {missing[locus]:6}   one allele typed: {half[locus]:6}")
@@ -561,6 +641,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    def input_options(p):
+        p.add_argument("--format", choices=FORMATS, help="default: guess from the extension or XML content")
+        p.add_argument("--glid", help="GLS input: the GLID file (default: the pull file with a .glid suffix)")
+        p.add_argument(
+            "--include-unapproved",
+            action="store_true",
+            help="NGSengine exports: also read locus results not approved in review (default: left untyped)",
+        )
+
     def data_options(p):
         p.add_argument("--data-dir", help="folder with manifest.json (default: $HLAHAPLOTOOLS_DATA or ./data)")
         p.add_argument("--nomenclature", help="lookup tables folder (default: from the manifest)")
@@ -612,9 +701,13 @@ def build_parser() -> argparse.ArgumentParser:
         )
 
     e = sub.add_parser("estimate", help="estimate haplotype frequencies")
-    e.add_argument("input", help="MAC (.dat/.mac) or GLSC (.glc/.glsc) file")
+    e.add_argument(
+        "input",
+        help="MAC (.dat/.mac), GLSC (.glc/.glsc), GLS pull file (.pull, with --glid), HML (.hml), "
+        "NGSengine XML export, or a folder of HML/XML files",
+    )
     e.add_argument("--loci", required=True, help="loci and resolutions, e.g. A:g,B:g,C:g,DRB1:g")
-    e.add_argument("--format", choices=["mac", "glsc"], help="default: guess from the file extension")
+    input_options(e)
     e.add_argument("-o", "--output", default="results", help="output folder (default: results)")
     em_options(e)
     e.add_argument(
@@ -653,7 +746,9 @@ def build_parser() -> argparse.ArgumentParser:
     f.set_defaults(func=cmd_families)
 
     h = sub.add_parser("haplomat", help="run from a Hapl-o-Mat parameter file")
-    h.add_argument("format", choices=["MAC", "GLSC", "mac", "glsc"], help="input format, as for Hapl-o-Mat")
+    h.add_argument(
+        "format", choices=["MAC", "GLSC", "GLS", "mac", "glsc", "gls"], help="input format, as for Hapl-o-Mat"
+    )
     h.add_argument("parameters", help="Hapl-o-Mat parameter file, e.g. parametersMAC")
     data_options(h)
     run_options(h)
@@ -674,7 +769,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("summary", help="summarise an input file without estimating")
     s.add_argument("input")
-    s.add_argument("--format", choices=["mac", "glsc"])
+    input_options(s)
     s.add_argument("--loci", help="comma-separated loci to keep")
     s.add_argument("--data-dir")
     s.add_argument("--mac-codes")

@@ -4,6 +4,7 @@ HLAhaploTools estimates HLA haplotype frequencies from population and family typ
 
 ## Key strengths
 
+- **Laboratory reports as input**: MAC and GL string tables, Hapl-o-Mat's GLS pull and GLID files, NMDP HML files, and GenDx NGSengine XML exports, read with all their ambiguity.
 - **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release.
 - **Any target resolution**: per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
 - **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
@@ -160,7 +161,30 @@ One person per line: an ID, then one GL string per locus in any order, separated
 2 A*03:01+ DRB1*15:01+DRB1*15:01
 ```
 
-A locus left out of a line is untyped (`2` has no B); `A*03:01+` has one allele typed and is read as homozygous.
+A locus left out of a line is untyped (`2` has no B); `A*03:01+` has one allele typed and is read as homozygous. A locus written without `+` (`DRB4*01:01:01G`, or `DRB3*01:01|DRB3*01:02`) is one allele typed, as laboratories often report DRB3/4/5. `HLA-` prefixes are accepted, and `^` may join several loci in one string.
+
+### GLS: pull and GLID files (`.pull`, `.glid`)
+
+Hapl-o-Mat's GLS input, as used by registries and laboratories that report through GL IDs. The GLID file numbers each locus GL string; the pull file lists, per person, one GL ID per locus:
+
+```text
+populationData.glid          populationData.pull
+1;A*01:01+A*02:01            s1;1:2
+2;B*08:01+B*07:02/B*07:03    s2;3:0
+3;A*03:01+A*11:01
+```
+
+GL ID `0` means the locus was not typed; the person is kept with that locus untyped (Hapl-o-Mat drops them). Each GL string names its locus, so Hapl-o-Mat's `LOCIORDER` is not needed. The GLID file is found beside the pull file (same name, `.glid`), or given with `--glid`.
+
+### HML (`.hml`)
+
+NMDP Histoimmunogenetics Markup Language, versions 1.0 and 1.0.1. Each `<sample id=...>` gives one person; each `<allele-assignment>` gives one locus, from its `<glstring>` or, when there is none, from its `<haploid>` alleles. A folder of HML files (often one per person) can be given as the input. Genotype lists (`|`) and allele lists (`/`) are kept in full and weighed by the EM, so no ambiguity is resolved by hand.
+
+### NGSengine XML export (`.xml`)
+
+The project export of GenDx NGSengine (`<ProjectXml>`, the TARR layout). For each `<Locus>`, the reviewed result in `<ConclusiveTypingResult>` is read for its `<SampleName>`. Locus results whose review status is not `Approved` (for example `Rejected`) and loci with no conclusive result are left untyped, and each is listed on screen and in `run.json`; `--include-unapproved` reads them anyway. Several exports, or a folder of them, can be read together. The file is read as a stream, so a 150 MB export with sequences takes a few seconds and little memory.
+
+The layout of `.xml` and `.hml` files is recognised from their content; `--format hml` or `--format ngsengine` overrides it. If the same person and locus appear twice with different results, the locus is left untyped and listed.
 
 ### Family table (`.csv`, `.tsv`)
 
@@ -201,7 +225,7 @@ A typing that covers several alleles at the target resolution (e.g. `A*02` at `2
 ```bash
 uv run hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]   # population data
 uv run hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]   # family data
-uv run hlahaplotools haplomat  MAC|GLSC PARAMETER_FILE                 # run from a parameter file
+uv run hlahaplotools haplomat  MAC|GLSC|GLS PARAMETER_FILE             # run from a parameter file
 uv run hlahaplotools summary   INPUT                                   # describe an input file
 uv run hlahaplotools rename    INPUT OUTPUT                            # update retired allele names
 ```
@@ -212,7 +236,9 @@ Options for `estimate` and `families`:
 | --------------------------------------------------- | --------------------------- | --------------------------------------------------------------------------- |
 | `--loci`                                          | required                    | Loci and resolutions, e.g. `A:g,C:g,B:g,DRB1:g`                           |
 | `-o`, `--output`                                | `results`                 | Output folder                                                               |
-| `--format`                                        | from extension              | `mac` or `glsc` (`estimate` only)                                     |
+| `--format`                                        | from extension or content   | `mac`, `glsc`, `gls`, `hml` or `ngsengine` (`estimate` and `summary`) |
+| `--glid`                                          | pull file with `.glid`      | GLS input: the GLID file                                                    |
+| `--include-unapproved`                            | off                         | NGSengine input: also read locus results not approved in review             |
 | `--epsilon`                                       | `1e-6`                    | Stop when no haplotype frequency changes by more than this                  |
 | `--init`                                          | `numberOccurrence`        | Start values: `numberOccurrence`, `perturbation`, `equal`, `random` |
 | `--seed`                                          | `0`                       | Seed for `perturbation` and `random`                                    |
@@ -229,7 +255,7 @@ Options for `estimate` and `families`:
 | `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families         |
 | `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                    |
 
-`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`). Loci are then ordered alphabetically, and the EM runs from a single start, as Hapl-o-Mat does. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
+`haplomat` reads a parameter file of `KEY=value` lines (`FILENAME_INPUT`, `FILENAME_HAPLOTYPEFREQUENCIES`, `FILENAME_EPSILON_LOGL`, `LOCI_AND_RESOLUTIONS`, `EPSILON`, `CUT_HAPLOTYPEFREQUENCIES`, `RENORMALIZE_HAPLOTYPEFREQUENCIES`, `INITIALIZATION_HAPLOTYPEFREQUENCIES`, `SEED`, `MINIMAL_FREQUENCY_GENOTYPES`; for GLS, `FILENAME_PULL` and `FILENAME_GLID` instead of `FILENAME_INPUT`). Loci are then ordered alphabetically, and the EM runs from a single start, as Hapl-o-Mat does. Hapl-o-Mat options that are not implemented (`DO_AMBIGUITYFILTER`, `WRITE_GENOTYPES`, `DO_ANALYTICS`) are ignored with a warning; `LOCIORDER` and `RESOLVE_MISSING_GENOTYPES` are not needed, since GL strings name their locus and untyped loci are always kept. Resolutions written the older way, in digits (`4d`, `6d`, `8d`), are read as `2f`, `3f`, `4f`. `haplomat` and `summary` also take `--half-typed` and `--no-drb345`.
 
 `rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
@@ -243,7 +269,7 @@ The exit status is 0 on success and 2 if the EM did not converge.
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hfs.dat`     | `haplotype<TAB>frequency`, most frequent first. Alleles are joined with `~` in the order given by `--loci`.                                                                                                                             |
 | `epsilon.dat` | One line per iteration: largest frequency change, log-likelihood                                                                                                                                                                              |
-| `run.json`    | Tool version, input, loci and resolutions, IMGT/HLA release, MAC table date, all parameters, how blank alleles were filled (rules and counts per locus), numbers of samples read, used and incomplete, iterations, log-likelihood, timings, and every unreadable line and left-out sample with the reason |
+| `run.json`    | Tool version, input, loci and resolutions, IMGT/HLA release, MAC table date, all parameters, how blank alleles were filled (rules and counts per locus), numbers of samples read, used and incomplete, iterations, log-likelihood, timings, and every unreadable line, locus result left untyped while reading (`loci_left_untyped`) and left-out sample with the reason |
 
 ### `families`
 
@@ -289,7 +315,7 @@ phases[0].children  # [("25-FS-5/C1", "A", "C"), ("25-FS-5/C2", "A", "D"), ...]
 est, phases = h.estimate_families(fam, nom, "2f")
 ```
 
-`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a dict. `read_glsc` reads GL string tables. `read_mac`, `read_glsc` and `read_family_table` take `half_typed="homozygous"|"unknown"` and `drb345=True|False`. Passing `mac_codes` as a path loads only the codes the input uses; `h.MacCodes(path)` loads the whole table for reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
+`resolutions` may be one code for all loci (`"g"`), a list in locus order, or a dict. `read_glsc` reads GL string tables, `read_gls(pull, glid)` GLS input, `read_hml(paths)` HML files and `read_ngsengine(paths, include_unapproved=False)` NGSengine exports (one path or a list); `ds.notes` lists locus results left untyped while reading, and `h.sniff_xml(path)` tells HML from NGSengine. All readers take `half_typed="homozygous"|"unknown"` and `drb345=True|False`. Passing `mac_codes` as a path loads only the codes the input uses; `h.MacCodes(path)` loads the whole table for reuse. Type hints are in [`_core.pyi`](src/hlahaplotools/_core.pyi).
 
 ## Methods
 
@@ -343,6 +369,10 @@ Work is split into fixed-size chunks that do not depend on the thread count, and
 ## Validation
 
 All results below are reproducible with the scripts in [scripts/](scripts). Simulated populations draw real allele names from IMGT/HLA 3.66.0 and give haplotypes skewed (Zipf-like) frequencies. Error is the total variation distance between estimated and true haplotype frequencies (0 = identical).
+
+### Agreement with Hapl-o-Mat
+
+`uv run python scripts/compare_haplomat.py MAC|GLSC|GLS INPUT --loci ...` runs the C++ Hapl-o-Mat and `hlahaplotools haplomat` on the same parameter file. On Hapl-o-Mat's example populations in all three input formats (MAC, GLSC, and GLS pull and GLID files), the frequencies agree to within 10⁻¹⁰ (the test tolerance); for GLS the largest difference is 0. These comparisons run in the test suite when the Hapl-o-Mat binary is built.
 
 ### Incomplete typing
 
@@ -398,7 +428,9 @@ Of the 1,273 alleles recovered for rebuilt parents, 1,266 are part of that paren
 - A blank second allele is read as homozygous. If a laboratory leaves alleles blank because they were not typed, use `--half-typed unknown`. The DRB3/4/5 rules follow the usual DRB1 groups and do not cover rare haplotypes with other gene content.
 - G and P resolutions are not available for MICA, MICB, H, J and the other loci without IMGT/HLA G and P groups.
 - Each extra locus multiplies the number of phases per person; loci left untyped in many people add many filled-in candidate haplotypes. Expect long runs and high memory use for 8 or more loci with incomplete typing.
-- Excel files are not read; save them as CSV. GL-string ID (GLID) files are not read.
+- Excel files are not read; save them as CSV. Phased GL strings (`~`) and GL strings given only by URI in HML are not read.
+- NGSengine exports are read from the `ConclusiveTypingResult` of each locus; other export layouts need converting to GLSC first.
+- Hapl-o-Mat's ambiguity filter, READ input and genotype and analytics outputs are not implemented.
 - On highly ambiguous data, the EM likelihood can have several nearly equal maxima; results then depend slightly on the start values.
 - With small cohorts, haplotype frequencies and the EM-versus-family comparison are not informative.
 
@@ -433,7 +465,7 @@ Please, also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/article
 
 HLAhaploTools is released under the GNU General Public License, version 3 or later ([LICENSE](LICENSE)).
 
-Some functions and scripts are ported from [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) by DKMS gGmbH, under the GPL-3.0 license: typing resolution and the lookup-table build, the EM algorithm, and the MAC, GL-string and parameter-file input formats.
+Some functions and scripts are ported from [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) by DKMS gGmbH, under the GPL-3.0 license: typing resolution and the lookup-table build, the EM algorithm, and the MAC, GL-string, GLS and parameter-file input formats. The HML and NGSengine readers follow the R functions `process_typing_hml()` and `process_typing_xml()` of the IHIWSImmunogenicity package, but keep the full ambiguity of each typing instead of its first option.
 
 Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ipd/imgt/hla/), and multiple-allele codes from the [NMDP](https://hml.nmdp.org/mac/).
 
