@@ -56,12 +56,12 @@ uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC t
 
 This writes `data/`:
 
-| Path                   | Contents                                                                                                 |
+| Path | Contents |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt`       |
+| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt` |
 | `derived/<release>/` | Lookup tables used for resolution: `AllAllelesExpanded.txt`, `LargeG.txt`, `P.txt`, `Smallg.txt` |
-| `mac/alpha.v3.txt`   | NMDP multiple-allele codes                                                                               |
-| `manifest.json`      | Release, source URLs, SHA-256 checksums, MAC table date                                                  |
+| `mac/alpha.v3.txt` | NMDP multiple-allele codes |
+| `manifest.json` | Release, source URLs, SHA-256 checksums, MAC table date |
 
 The IMGT/HLA release is pinned (`PINNED_RELEASE` in [scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
 
@@ -208,16 +208,16 @@ fam01,C1,A*01:01,A*03:01,B*08:01,B*35:01,DRB1*03:01,DRB1*04:01
 
 Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g. `--loci A:g,B:g,DRB1:2f`):
 
-| Code       | Target                                                          | Example for `A*02:01:01:01` |
+| Code | Target | Example for `A*02:01:01:01` |
 | ---------- | --------------------------------------------------------------- | ----------------------------- |
-| `1f`     | First field                                                     | `A*02`                      |
-| `2f`     | Two fields                                                      | `A*02:01`                   |
-| `3f`     | Three fields                                                    | `A*02:01:01`                |
-| `4f`     | Four fields                                                     | `A*02:01:01:01`             |
-| `g`      | g group (identical antigen-recognition domains, nulls included) | `A*02:01g`                  |
-| `G`      | G group (identical exons 2 and 3, or 2 for class II)            | `A*02:01:01G`               |
-| `P`      | P group (identical protein in the antigen-recognition domains)  | `A*02:01P`                  |
-| `asItIs` | Typings used exactly as written, without lookup                 | `A*02:01:01:01`             |
+| `1f` | First field | `A*02` |
+| `2f` | Two fields | `A*02:01` |
+| `3f` | Three fields | `A*02:01:01` |
+| `4f` | Four fields | `A*02:01:01:01` |
+| `g` | g group (identical antigen-recognition domains, nulls included) | `A*02:01g` |
+| `G` | G group (identical exons 2 and 3, or 2 for class II) | `A*02:01:01G` |
+| `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
+| `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
 
 A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Every locus in the IPD-IMGT/HLA allele list can be resolved, including MICA, MICB and the non-classical and pseudogene loci (E, F, G, H, J, K, L, DQA2, TAP1, ...), so haplotypes can extend beyond the classical loci. IMGT/HLA defines G and P groups only for the classical and E/F/G-type loci; for the others, use `1f` to `4f` or `g` (the 2-field name). Loci not in the list at all can still be used with `asItIs`.
 
@@ -470,7 +470,7 @@ Tests that need the reference data are skipped until `scripts/build_nomenclature
 
 ## Citation
 
-If you use HLAhaploTools, please cite this repository, and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`.
+If you use HLAhaploTools, please cite this [repository](https://github.com/fmobegi/HLAhaploTools), and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`.
 Please, also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and other data preprocessing methods used in HLAhaploTools.
 
 ## License and acknowledgements
