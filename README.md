@@ -56,12 +56,12 @@ uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC t
 
 This writes `data/`:
 
-| Path | Contents |
+| Path                   | Contents                                                                                                 |
 | ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt` |
+| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt`       |
 | `derived/<release>/` | Lookup tables used for resolution: `AllAllelesExpanded.txt`, `LargeG.txt`, `P.txt`, `Smallg.txt` |
-| `mac/alpha.v3.txt` | NMDP multiple-allele codes |
-| `manifest.json` | Release, source URLs, SHA-256 checksums, MAC table date |
+| `mac/alpha.v3.txt`   | NMDP multiple-allele codes                                                                               |
+| `manifest.json`      | Release, source URLs, SHA-256 checksums, MAC table date                                                  |
 
 The IMGT/HLA release is pinned (`PINNED_RELEASE` in [scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
 
@@ -123,12 +123,12 @@ Check `flags.tsv` first: correct or remove flagged people and rerun. Every file 
 
 **Run time and memory.** Measured on a laptop (4 cores, 16 GB) for a cohort of 15,633 people typed at mixed depth with DQA1 and DPA1 untyped in about 30%, at two-field resolution with ten starts:
 
-| Loci | People incomplete | Candidate haplotypes | Time | Peak memory |
-| ---- | ----------------- | -------------------- | ---- | ----------- |
-| 5 (A, B, C, DRB1, DQB1) | 217 | 0.26 million | 13 s | 0.3 GB |
-| 6 (+ DPB1) | 403 | 0.7 million | 46 s | 0.6 GB |
-| 8 (+ DQA1, DPA1) | 4,760 | 4.7 million | 2.5 min | 1.8 GB |
-| 11 (+ DRB3, DRB4, DRB5) | 4,831 | 16 million | 8 min | 6.1 GB |
+| Loci                    | People incomplete | Candidate haplotypes | Time    | Peak memory |
+| ----------------------- | ----------------- | -------------------- | ------- | ----------- |
+| 5 (A, B, C, DRB1, DQB1) | 217               | 0.26 million         | 13 s    | 0.3 GB      |
+| 6 (+ DPB1)              | 403               | 0.7 million          | 46 s    | 0.6 GB      |
+| 8 (+ DQA1, DPA1)        | 4,760             | 4.7 million          | 2.5 min | 1.8 GB      |
+| 11 (+ DRB3, DRB4, DRB5) | 4,831             | 16 million           | 8 min   | 6.1 GB      |
 
 Memory grows with the number of candidate haplotypes, which grows with the loci and with how many people are untyped at several of them. Family analyses of a few hundred families take seconds to minutes.
 
@@ -208,16 +208,16 @@ fam01,C1,A*01:01,A*03:01,B*08:01,B*35:01,DRB1*03:01,DRB1*04:01
 
 Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g. `--loci A:g,B:g,DRB1:2f`):
 
-| Code | Target | Example for `A*02:01:01:01` |
+| Code       | Target                                                          | Example for `A*02:01:01:01` |
 | ---------- | --------------------------------------------------------------- | ----------------------------- |
-| `1f` | First field | `A*02` |
-| `2f` | Two fields | `A*02:01` |
-| `3f` | Three fields | `A*02:01:01` |
-| `4f` | Four fields | `A*02:01:01:01` |
-| `g` | g group (identical antigen-recognition domains, nulls included) | `A*02:01g` |
-| `G` | G group (identical exons 2 and 3, or 2 for class II) | `A*02:01:01G` |
-| `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
-| `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
+| `1f`     | First field                                                     | `A*02`                      |
+| `2f`     | Two fields                                                      | `A*02:01`                   |
+| `3f`     | Three fields                                                    | `A*02:01:01`                |
+| `4f`     | Four fields                                                     | `A*02:01:01:01`             |
+| `g`      | g group (identical antigen-recognition domains, nulls included) | `A*02:01g`                  |
+| `G`      | G group (identical exons 2 and 3, or 2 for class II)            | `A*02:01:01G`               |
+| `P`      | P group (identical protein in the antigen-recognition domains)  | `A*02:01P`                  |
+| `asItIs` | Typings used exactly as written, without lookup                 | `A*02:01:01:01`             |
 
 A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Every locus in the IPD-IMGT/HLA allele list can be resolved, including MICA, MICB and the non-classical and pseudogene loci (E, F, G, H, J, K, L, DQA2, TAP1, ...), so haplotypes can extend beyond the classical loci. IMGT/HLA defines G and P groups only for the classical and E/F/G-type loci; for the others, use `1f` to `4f` or `g` (the 2-field name). Loci not in the list at all can still be used with `asItIs`.
 
@@ -392,9 +392,9 @@ With 15% of the remaining C and DQB1 typings also half-typed, errors were 0.048 
 `uv run python scripts/plasmode.py TRUTH_HFS COHORT -o OUT --reps 3` (plasmode simulation). The frequencies estimated from a real cohort of 15,633 people are taken as the truth; new cohorts of the same size are drawn from them, with each simulated person untyped at the loci one real person was untyped at (about 30% at DQA1 and DPA1), and re-estimated from everyone and from the fully typed people only. Three replicates, mean (range); "common" haplotypes are those with a true frequency of at least 0.1%.
 
 | Loci | True haplotypes | Error, everyone (15,633) | Error, fully typed only (10,873) | Common haplotypes: mean relative error, everyone / fully typed |
-| ---- | --------------- | ------------------------ | -------------------------------- | ------------------------------------------------------------- |
-| 8    | 38,645          | 0.320 (0.317–0.322)      | 0.356 (0.355–0.357)              | 16% / 18%                                                     |
-| 11   | 31,980          | 0.307 (0.306–0.308)      | 0.344 (0.339–0.348)              | 17% / 18%                                                     |
+| ---- | --------------- | ------------------------ | -------------------------------- | -------------------------------------------------------------- |
+| 8    | 38,645          | 0.320 (0.317–0.322)     | 0.356 (0.355–0.357)             | 16% / 18%                                                      |
+| 11   | 31,980          | 0.307 (0.306–0.308)     | 0.344 (0.339–0.348)             | 17% / 18%                                                      |
 
 The total error is much larger than in the simulations above because real haplotype frequencies have a long tail: the 78 haplotypes at 0.1% or more carry only about a quarter of the frequency, and the rest is spread over tens of thousands of rare haplotypes that 31,000 chromosomes cannot resolve. Expect common haplotypes to be estimated to within about 15–20% of their frequency at this cohort size, and treat rare ones as uncertain. Using everyone lowered the error by 10–11%; in these simulations the untyped loci were assigned at random, so in real data, where typing is often not missing at random, the gain is larger.
 
@@ -477,7 +477,9 @@ Please, also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/article
 
 HLAhaploTools is released under the GNU General Public License, version 3 or later ([LICENSE](LICENSE)).
 
-Some functions and scripts are ported from [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) by DKMS gGmbH, under the GPL-3.0 license: typing resolution and the lookup-table build, the EM algorithm, and the MAC, GL-string, GLS and parameter-file input formats. The HML and NGSengine readers follow the R functions `process_typing_hml()` and `process_typing_xml()` of the IHIWSImmunogenicity package, but keep the full ambiguity of each typing instead of its first option.
+HLAhaploTools reimplements, in new Rust and Python code, some methods of [Hapl-o-Mat](https://github.com/DKMS/Hapl-o-Mat) (DKMS gGmbH, GPL-3.0): typing resolution and the lookup-table build, the EM algorithm, and its MAC, GL string, GLS and parameter-file input formats. Their rules follow Hapl-o-Mat's so that the logic and results agree. The HML and NGSengine readers follow the R functions `process_typing_hml()` and `process_typing_xml()` of the IHIWSImmunogenicity package, but keep the full ambiguity of each typing instead of its first option.
+
+Related tools from NMDP Bioinformatics complement HLAhaploTools; no code is taken from them. [py-ard](https://github.com/nmdp-bioinformatics/py-ard) reduces typings to antigen-recognition-domain (ARD) groups and serological equivalents, and [py-graph-imputation](https://github.com/nmdp-bioinformatics/py-graph-imputation), the successor of GRIMM, imputes individual genotypes from haplotype frequencies such as those HLAhaploTools estimates.
 
 Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ipd/imgt/hla/), and multiple-allele codes from the [NMDP](https://hml.nmdp.org/mac/).
 
