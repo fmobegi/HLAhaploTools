@@ -484,6 +484,6 @@ Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ip
 
 This repository previously held an R package of the same name; its last version is tagged [`r-package-v0.99.0`](https://github.com/fmobegi/HLAhaploTools/tree/r-package-v0.99.0).
 
-## Use of Artificial Intelligence
+## Use of AI
 
->This repository has been developed with the assistance of AI tools, including GitHub Copilot and Anthropic's Claude Sonnet 5.5 and Claude Opus 5.5. These tools were used to generate code snippets, documentation, and other content. All code and documentation have been reviewed and tested by the developers to ensure accuracy, functionality, and compliance with project standards.
+> This software was developed with the assistance of Artificial Intelligence tools: GitHub Copilot, and Anthropic’s Claude Sonnet 5.5 and Claude Opus 5.5. They were used to port over existing code, generate code snippets, revise the authors' source code and documentation, and compare analysis test results between different tools, under the direction of the developer(s). All AI-generated material was extensively reviewed, tested and, where needed, corrected by the author to ensure accuracy, functionality, and compliance with project standards. Correctness was checked by an automated test suite, by agreement with Hapl-o-Mat on shared inputs, and by simulations with known true frequencies.
