@@ -42,9 +42,11 @@ from hlahaplotools._core import (
     sniff_xml,
 )
 from hlahaplotools.cli import main
+from hlahaplotools.correction import adjust_fdr
 from hlahaplotools.multistart import estimate_multistart
 
 __all__ = [
+    "adjust_fdr",
     "Dataset",
     "Estimate",
     "FamilyData",

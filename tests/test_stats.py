@@ -81,4 +81,13 @@ def test_stats_command_writes_tables(tmp_path):
     ld = (out / "ld.tsv").read_text().splitlines()
     assert len(ld) == 3 and ld[1].startswith("A\tC\t") and ld[2].startswith("C\tB\t")
     assert (out / "ld_alleles.tsv").read_text().count("\n") > 10
+    assert hwe[0].split("\t")[7] == "q_value" and ld[0].split("\t")[-1] == "q_value"
     assert json.loads((out / "run.json").read_text())["parameters"]["permutations"] == 500
+
+
+def test_adjust_fdr_matches_benjamini_hochberg():
+    q = h.adjust_fdr([0.01, 0.04, None, 0.03, 0.2])
+    # Sorted 0.01, 0.03, 0.04, 0.2 over m = 4: 0.04, 0.0533, 0.0533, 0.2 (monotone).
+    assert q[2] is None and abs(q[0] - 0.04) < 1e-12 and abs(q[4] - 0.2) < 1e-12
+    assert abs(q[1] - 0.16 / 3) < 1e-12 and abs(q[3] - 0.16 / 3) < 1e-12
+    assert h.adjust_fdr([0.001] * 55) == [0.001] * 55

@@ -21,6 +21,7 @@ from hlahaplotools._core import (
     read_ngsengine,
     sniff_xml,
 )
+from hlahaplotools.correction import adjust_fdr
 from hlahaplotools.multistart import estimate_multistart
 
 INITS = ["numberOccurrence", "perturbation", "equal", "random"]
@@ -469,6 +470,9 @@ def cmd_stats(args) -> int:
     equilibrium is tested by permutation: one locus is shuffled across people and the
     two-locus likelihood re-estimated (the chi-square statistic is reported for reference;
     with many rare alleles its chi-square distribution does not hold).
+
+    Both tables add q_value: the Benjamini–Hochberg false discovery rate adjusted P,
+    across the loci (hwe.tsv) or the pairs (ld.tsv) of the run.
     """
     say = (lambda *a: None) if args.quiet else print
     nom_dir, mac, manifest = resolve_data_paths(args)
@@ -486,12 +490,14 @@ def cmd_stats(args) -> int:
 
     hwe = hardy_weinberg(ds, nom, res, permutations=args.permutations, seed=args.seed, threads=args.threads)
     t1 = time.perf_counter()
+    for r, q in zip(hwe, adjust_fdr([r["p_value"] for r in hwe]), strict=True):
+        r["q_value"] = q
     cols = ["locus", "n", "alleles", "observed_heterozygosity", "expected_heterozygosity", "f", "p_value",
-            "untyped", "half_typed", "ambiguous", "homozygous_filled"]  # fmt: skip
+            "q_value", "untyped", "half_typed", "ambiguous", "homozygous_filled"]  # fmt: skip
     _tsv(out / "hwe.tsv", cols, ([r[c] for c in cols] for r in hwe))
     say(f"Hardy–Weinberg ({args.permutations:,} random tables per locus; hwe.tsv):")
     for r in hwe:
-        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}"
+        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}  q={r['q_value']:.4f}"
         note = f"  ({r['homozygous_filled']} read as homozygous from a blank)" if r["homozygous_filled"] else ""
         ho, he = r["observed_heterozygosity"], r["expected_heterozygosity"]
         say(f"  {r['locus']:6} n={r['n']:6}  Ho={ho:.3f}  He={he:.3f}  F={r['f']:+.3f}  P={p}{note}")
@@ -506,7 +512,9 @@ def cmd_stats(args) -> int:
         completion=args.completion, threads=args.threads, permutations=args.ld_permutations,
     )  # fmt: skip
     t2 = time.perf_counter()
-    cols = ["locus_a", "locus_b", "n", "alleles_a", "alleles_b", "d_prime", "wn", "chi2", "df", "p_value"]
+    for r, q in zip(ld, adjust_fdr([r["p_value"] for r in ld]), strict=True):
+        r["q_value"] = q
+    cols = ["locus_a", "locus_b", "n", "alleles_a", "alleles_b", "d_prime", "wn", "chi2", "df", "p_value", "q_value"]
     _tsv(out / "ld.tsv", cols, ([r[c] for c in cols] for r in ld))
     pcols = ["allele_a", "allele_b", "haplotype_frequency", "frequency_a", "frequency_b", "d", "d_prime"]
     _tsv(out / "ld_alleles.tsv", ["locus_a", "locus_b", *pcols],
@@ -514,7 +522,7 @@ def cmd_stats(args) -> int:
     perm = f"; P from {args.ld_permutations:,} permutations" if args.ld_permutations else ""
     say(f"Linkage disequilibrium (ld.tsv; per allele pair in ld_alleles.tsv{perm}):")
     for r in ld:
-        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}"
+        p = "–" if r["p_value"] is None else f"{r['p_value']:.4f}  q={r['q_value']:.4f}"
         say(f"  {r['locus_a']}~{r['locus_b']:6} n={r['n']:6}  D'={r['d_prime']:.3f}  Wn={r['wn']:.3f}"
             f"  P={p}")  # fmt: skip
 

@@ -295,8 +295,8 @@ The exit status is 0 on success and 2 if the EM did not converge.
 
 | File              | Contents |
 | ----------------- | -------- |
-| `hwe.tsv`         | Per locus: people tested, alleles, observed and expected heterozygosity, F, exact-test P, and people not tested (untyped, half-typed, ambiguous) or read as homozygous from a blank |
-| `ld.tsv`          | Per pair of loci: people used, alleles at each locus, D′, Wn, likelihood-ratio statistic, nominal degrees of freedom, and the permutation P-value (with `--ld-permutations`) |
+| `hwe.tsv`         | Per locus: people tested, alleles, observed and expected heterozygosity, F, exact-test P, its false-discovery-rate q-value, and people not tested (untyped, half-typed, ambiguous) or read as homozygous from a blank |
+| `ld.tsv`          | Per pair of loci: people used, alleles at each locus, D′, Wn, likelihood-ratio statistic, nominal degrees of freedom, and the permutation P-value and its q-value (with `--ld-permutations`) |
 | `ld_alleles.tsv`  | Per pair of loci and allele pair: haplotype frequency, allele frequencies, D and D′, most frequent first |
 | `run.json`        | Input, loci and resolutions, reference data versions and parameters |
 
@@ -383,6 +383,8 @@ Each child is compared with haplotypes phased from the rest of its family, leavi
 **Hardy–Weinberg.** Only people whose genotype at the locus is unambiguous at the target resolution are tested; untyped, half-typed and ambiguous people are counted apart. Expected heterozygosity is Nei's unbiased estimate, 2n/(2n−1)(1 − Σp²), and F = 1 − Ho/He (positive when heterozygotes are too few). The exact test compares the probability of the observed genotype table, given the allele counts, with that of tables formed by pairing the same alleles at random; P is the share of random tables at most as probable as the observed one. With large samples even small departures are significant, so read F alongside P. A blank second allele read as homozygous adds homozygotes; their number is reported, and `--half-typed unknown` leaves those people out.
 
 **Linkage disequilibrium.** For each pair of loci, haplotype frequencies are estimated by EM from everyone typed at either locus. With allele frequencies p and q and D = p_ab − p_a q_b: D′ for an allele pair divides D by its largest possible value with the same sign; the overall D′ (Hedrick) is Σ p_a q_b |D′_ab|; and Wn (Cohen) is √(Σ D²/(p_a q_b) / (min(k, l) − 1)), Cramér's V of the haplotype table, 0 under equilibrium and 1 when each allele at one locus goes with one at the other. With `--ld-permutations N`, linkage equilibrium is tested by permutation: one locus is shuffled across people, which keeps each locus's own data but breaks any association, the two-locus likelihood is re-estimated, and P is the share of the N shuffled datasets that fit at least as well as the real one (each needs an EM, so this takes time). The likelihood-ratio statistic 2(logL₂ − logL_A − logL_B) is also written, with its nominal (k − 1)(l − 1) degrees of freedom, but no χ² P-value: HLA loci at two fields have hundreds of mostly rare alleles, and the χ² approximation then fails.
+
+**Multiple testing.** A run tests many loci and pairs at once, so `hwe.tsv` and `ld.tsv` also give `q_value`, the Benjamini–Hochberg false-discovery-rate adjusted P across the loci or pairs of that run; report it rather than the raw P. A permutation P cannot be smaller than 1/(N + 1), so choose N large enough for the corrected threshold: with 55 pairs, 999 permutations give P ≥ 0.001, above a Bonferroni threshold of 0.05/55 ≈ 0.0009, while 1,999 permutations give P ≥ 0.0005.
 
 ### Determinism
 
