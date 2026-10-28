@@ -28,7 +28,7 @@ class Dataset:
     def __len__(self) -> int: ...
 
 class Nomenclature:
-    def __init__(self, path: StrPath) -> None: ...
+    def __init__(self, path: StrPath, *, serology: bool = False, v2_names: bool = False) -> None: ...
     @property
     def source(self) -> str | None: ...
     def translate(self, code: str, resolution: str) -> list[tuple[str, float]]: ...
@@ -234,3 +234,20 @@ def audit_families(
     min_loci_compared: int = 5,
     cross_family_duplicates: bool = False,
 ) -> list[dict[str, Any]]: ...
+def resolved_genotypes(
+    dataset: Dataset,
+    nomenclature: Nomenclature,
+    resolutions: str | list[str] | dict[str, str] | None = None,
+    *,
+    min_genotype_frequency: float = 1e-5,
+) -> tuple[list[tuple[str, list[tuple[str, str, float]]]], list[tuple[int, str | None, str]]]: ...
+def impute(
+    dataset: Dataset,
+    nomenclature: Nomenclature,
+    populations: list[tuple[str, list[tuple[str, float]], float]],
+    resolutions: str | list[str] | dict[str, str] | None = None,
+    *,
+    top: int = 10,
+    max_candidates: int = 5000,
+    threads: int | None = None,
+) -> tuple[list[dict[str, Any]], list[tuple[int, str | None, str]]]: ...

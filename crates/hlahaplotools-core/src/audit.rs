@@ -26,7 +26,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::Error;
-use crate::dataset::Dataset;
+use crate::dataset::{Dataset, LocusObs};
 use crate::estimate::{LocusGeno, ResolvedSample, WILD};
 use crate::family::{
     Family, HAPLOTYPE_LABELS, ParentLocus, Pedigree, PhaseStatus, child_possible, options_text,
@@ -271,10 +271,17 @@ pub fn audit_families(
         });
     }
     for issue in &issues {
-        let fam = issue
+        let sample = issue
             .sample_id
             .as_ref()
-            .and_then(|s| ds.samples.iter().position(|x| &x.id == s))
+            .and_then(|s| ds.samples.iter().position(|x| &x.id == s));
+        // A member with a blank row (an untyped parent, kept to place the
+        // children) is a gap in the data, not a problem: phasing treats them
+        // as unknown.
+        if sample.is_some_and(|i| ds.samples[i].loci.iter().all(LocusObs::is_missing)) {
+            continue;
+        }
+        let fam = sample
             .and_then(|i| family_of.get(&i).copied())
             .unwrap_or_default();
         flags.push(PedigreeFlag {

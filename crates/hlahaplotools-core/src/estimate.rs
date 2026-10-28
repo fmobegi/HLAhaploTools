@@ -249,7 +249,7 @@ impl LocusGeno {
     }
 
     /// Is the ordered pair (x on haplotype 1, y on haplotype 2) consistent with this locus?
-    fn allows(self, x: u32, y: u32) -> bool {
+    pub(crate) fn allows(self, x: u32, y: u32) -> bool {
         let fits = |want: u32, got: u32| want == WILD || want == got;
         if self.phased {
             return fits(self.a, x) && fits(self.b, y);
@@ -1698,4 +1698,67 @@ mod tests {
             "bit-identical across thread counts"
         );
     }
+}
+
+/// One resolved multilocus genotype of a sample: Hapl-o-Mat's report type per locus
+/// (`N` one genotype, `A` several), the genotype as `A*..+A*..^B*..+B*..` (an unknown
+/// copy written `A*?`), and its weight (a sample's weights sum to 1).
+pub type GenotypeReport = (String, String, f64);
+
+/// Per sample: its id and resolved genotypes.
+pub type SampleGenotypes = Vec<(String, Vec<GenotypeReport>)>;
+
+/// Every resolved genotype of every sample, as Hapl-o-Mat writes them with
+/// WRITE_GENOTYPES (`id<TAB>type<TAB>weight<TAB>genotype`), in input order. Samples
+/// with more genotypes than `1 / min_genotype_frequency`, or that cannot be resolved,
+/// are left out and returned as issues, as in the estimate.
+pub fn resolved_genotypes(
+    ds: &Dataset,
+    nom: &Nomenclature,
+    resolutions: &[Resolution],
+    min_genotype_frequency: f64,
+) -> Result<(SampleGenotypes, Vec<Issue>), Error> {
+    let (resolver, samples, mut issues) = resolve_dataset(ds, nom, resolutions)?;
+    let codes = &resolver.codes;
+    let name = |c: u32, locus: &str| {
+        if c == WILD {
+            format!("{locus}*?")
+        } else {
+            codes.name(AlleleId(c)).to_owned()
+        }
+    };
+    let mut out = Vec::new();
+    for sample in samples.into_iter().flatten() {
+        let n_reports: f64 = sample.per_locus.iter().map(|o| o.len() as f64).product();
+        if 1.0 / n_reports - min_genotype_frequency < ZERO {
+            issues.push(Issue {
+                line: 0,
+                sample_id: Some(sample.id.clone()),
+                message: format!(
+                    "{n_reports} possible genotypes exceed the limit of {} (min_genotype_frequency)",
+                    1.0 / min_genotype_frequency
+                ),
+            });
+            continue;
+        }
+        let kind: String = sample
+            .per_locus
+            .iter()
+            .map(|o| if o.len() == 1 { 'N' } else { 'A' })
+            .collect();
+        let mut reports = Vec::new();
+        for_each_combination(&sample.per_locus, |idx| {
+            let mut w = 1.0;
+            let mut parts = Vec::with_capacity(idx.len());
+            for (k, &i) in idx.iter().enumerate() {
+                let (g, wi) = sample.per_locus[k][i];
+                w *= wi;
+                let locus = &ds.loci[k];
+                parts.push(format!("{}+{}", name(g.a, locus), name(g.b, locus)));
+            }
+            reports.push((kind.clone(), parts.join("^"), w));
+        });
+        out.push((sample.id, reports));
+    }
+    Ok((out, issues))
 }

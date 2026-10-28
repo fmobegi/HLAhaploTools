@@ -10,8 +10,10 @@ Layout written:
 
     data/
       imgthla/<release>/Allelelist.txt, hla_nom.txt, hla_nom_g.txt,
-                        hla_nom_p.txt, Deleted_alleles.txt
-      derived/<release>/AllAllelesExpanded.txt, LargeG.txt, P.txt, Smallg.txt
+                        hla_nom_p.txt, Deleted_alleles.txt, rel_dna_ser.txt,
+                        rel_ser_ser.txt, Nomenclature_2009.txt
+      derived/<release>/AllAllelesExpanded.txt, LargeG.txt, P.txt, Smallg.txt,
+                        Serology.txt, V2.txt
       mac/alpha.v3.txt
       manifest.json      # release, source URLs, sha256, MAC "LAST UPDATED"
 
@@ -51,7 +53,11 @@ IMGT_FILES = {
     "hla_nom_g.txt": "wmda/hla_nom_g.txt",
     "hla_nom_p.txt": "wmda/hla_nom_p.txt",
     "Deleted_alleles.txt": "Deleted_alleles.txt",
+    "rel_dna_ser.txt": "wmda/rel_dna_ser.txt",  # allele -> serological antigen
+    "rel_ser_ser.txt": "wmda/rel_ser_ser.txt",  # broad antigen -> splits, associated antigens
+    "Nomenclature_2009.txt": "Nomenclature_2009.txt",  # pre-2010 (V2) names; no version header
 }
+UNVERSIONED = {"Nomenclature_2009.txt"}
 MAC_URL = "https://hml.nmdp.org/mac/files/alpha.v3.zip"
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -108,7 +114,7 @@ def fetch_imgt(release: str, data: Path, force: bool) -> dict:
         else:
             print(f"  have {rel(dest)}")
         found = imgt_version(dest)
-        if found != release:
+        if name not in UNVERSIONED and found != release:
             sys.exit(f"error: {dest} says version {found!r}, expected {release!r}")
         files[name] = {"url": url, "sha256": sha256(dest), "bytes": dest.stat().st_size}
     return {"release": release, "dir": rel(out_dir), "files": files}

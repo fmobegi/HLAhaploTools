@@ -50,7 +50,9 @@ def test_manifest_records_release_mac_date_and_tables():
     m = json.loads(MANIFEST.read_text())
     assert m["imgthla"]["release"]
     assert set(m["imgthla"]["files"]) >= {"Allelelist.txt", "hla_nom_g.txt", "hla_nom_p.txt", "hla_nom.txt"}
-    assert set(m["derived"]["rows"]) == {"AllAllelesExpanded.txt", "LargeG.txt", "P.txt", "Smallg.txt"}
+    tables = set(m["derived"]["rows"])
+    assert tables >= {"AllAllelesExpanded.txt", "LargeG.txt", "P.txt", "Smallg.txt"}
+    assert tables <= {"AllAllelesExpanded.txt", "LargeG.txt", "P.txt", "Smallg.txt", "Serology.txt", "V2.txt"}
     if "mac" in m:
         assert m["mac"]["last_updated"].startswith("LAST UPDATED")
 

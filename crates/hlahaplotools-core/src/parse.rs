@@ -66,6 +66,11 @@ impl Resolver<'_> {
             return Ok(vec![self.table.intern(locus_idx, &format!("{locus}*NNNN"))]);
         }
         match classify(typing) {
+            // Pre-2010 names run their fields together (`010101`, `01010102N`);
+            // kept, so the resolver can rename them or say what they are.
+            None if is_v2_like(typing) => Ok(vec![
+                self.table.intern(locus_idx, &format!("{locus}*{typing}")),
+            ]),
             None => Err(format!("unrecognised typing {locus}*{typing}")),
             Some(TypingKind::Mac) => {
                 let (family, code) = typing.split_once(':').expect("MAC typings contain ':'");
@@ -109,6 +114,14 @@ impl Resolver<'_> {
         }
         Ok(out)
     }
+}
+
+/// Five to nine digits, with an optional expression letter: a pre-2010 name.
+fn is_v2_like(typing: &str) -> bool {
+    let body = typing
+        .strip_suffix(['N', 'L', 'S', 'Q', 'C', 'A'])
+        .unwrap_or(typing);
+    (5..=9).contains(&body.len()) && body.bytes().all(|b| b.is_ascii_digit())
 }
 
 /// `A*01:01` -> `01:01`, checking the locus matches.
@@ -343,19 +356,76 @@ pub(crate) struct GlRecord {
 
 /// Tidy a GL string as written in HML or vendor exports: drop whitespace and
 /// `HLA-` prefixes, and split `^`-joined loci into one string per locus.
+///
+/// A phased part (`A*01:01~B*08:01+A*02:01~B*07:02`, `~` joining the loci of one
+/// haplotype) is read without its phase: one unphased genotype per locus.
 pub(crate) fn normalise_gl(gl: &str) -> Result<Vec<String>, String> {
     let compact: String = gl.chars().filter(|c| !c.is_whitespace()).collect();
     let compact = compact.replace("HLA-", "");
-    if compact.contains('~') {
-        return Err(format!(
-            "phased GL string {compact} ('~') is not supported; give each locus separately"
-        ));
+    let mut out = Vec::new();
+    for part in compact.split('^').filter(|s| !s.is_empty()) {
+        if part.contains('~') {
+            out.extend(unphase(part)?);
+        } else {
+            out.push(part.to_owned());
+        }
     }
-    Ok(compact
-        .split('^')
-        .filter(|s| !s.is_empty())
-        .map(str::to_owned)
-        .collect())
+    Ok(out)
+}
+
+/// `A*01~B*08+A*02~B*07|A*01~B*07+A*02~B*08` -> `["A*01+A*02", "B*08+B*07|B*07+B*08"]`:
+/// per locus, the genotypes of the alternatives, without repeats.
+fn unphase(part: &str) -> Result<Vec<String>, String> {
+    let mut loci: Vec<String> = Vec::new();
+    let mut per_locus: Vec<Vec<String>> = Vec::new();
+    for alternative in part.split('|') {
+        let haps: Vec<&str> = alternative.split('+').collect();
+        if haps.len() > 2 {
+            return Err(format!("{alternative} has more than two haplotypes"));
+        }
+        // locus -> allele list on each haplotype
+        let mut sides: Vec<(String, [Option<&str>; 2])> = Vec::new();
+        for (h, hap) in haps.iter().enumerate() {
+            for list in hap.split('~').filter(|s| !s.is_empty()) {
+                let locus = list
+                    .split_once('*')
+                    .map(|(l, _)| l.to_owned())
+                    .ok_or_else(|| format!("{list} has no locus name"))?;
+                match sides.iter_mut().find(|(l, _)| *l == locus) {
+                    Some((_, s)) if s[h].is_none() => s[h] = Some(list),
+                    Some(_) => {
+                        return Err(format!(
+                            "locus {locus} twice on one haplotype in {alternative}"
+                        ));
+                    }
+                    None => {
+                        let mut s = [None, None];
+                        s[h] = Some(list);
+                        sides.push((locus, s));
+                    }
+                }
+            }
+        }
+        for (locus, s) in sides {
+            let g = match s {
+                [Some(a), Some(b)] => format!("{a}+{b}"),
+                [Some(a), None] | [None, Some(a)] => a.to_owned(),
+                [None, None] => continue,
+            };
+            let k = match loci.iter().position(|l| *l == locus) {
+                Some(k) => k,
+                None => {
+                    loci.push(locus);
+                    per_locus.push(Vec::new());
+                    loci.len() - 1
+                }
+            };
+            if !per_locus[k].contains(&g) {
+                per_locus[k].push(g);
+            }
+        }
+    }
+    Ok(per_locus.into_iter().map(|g| g.join("|")).collect())
 }
 
 /// Build a dataset from GL-string records. `issues` are records already
@@ -363,7 +433,7 @@ pub(crate) fn normalise_gl(gl: &str) -> Result<Vec<String>, String> {
 pub(crate) fn dataset_from_gl(
     records: Vec<GlRecord>,
     mut issues: Vec<Issue>,
-    notes: Vec<Issue>,
+    mut notes: Vec<Issue>,
     opts: &ParseOptions,
 ) -> Dataset {
     // Normalise every field first, so locus names are known.
@@ -372,6 +442,15 @@ pub(crate) fn dataset_from_gl(
     for r in records {
         let mut fields = Vec::with_capacity(r.fields.len());
         let mut err = None;
+        if r.fields.iter().any(|f| f.contains('~')) {
+            notes.push(Issue {
+                line: r.line,
+                sample_id: Some(r.id.clone()),
+                message: "phased GL string ('~') read without its phase: one unphased genotype \
+                          per locus"
+                    .into(),
+            });
+        }
         for f in &r.fields {
             match normalise_gl(f) {
                 Ok(parts) => fields.extend(parts),
@@ -1038,6 +1117,23 @@ mod tests {
         assert!(ds.samples[1].loci[1].is_missing());
         assert_eq!(ds.issues.len(), 1);
         assert!(ds.issues[0].message.contains("GL ID 9"));
+    }
+
+    #[test]
+    fn phased_gl_strings_are_read_unphased() {
+        let got = normalise_gl(
+            "HLA-A*01:01~HLA-B*08:01+HLA-A*02:01~HLA-B*07:02|A*01:01~B*07:02+A*02:01~B*08:01^C*07:01+C*07:02",
+        )
+        .unwrap();
+        assert_eq!(
+            got,
+            [
+                "A*01:01+A*02:01",
+                "B*08:01+B*07:02|B*07:02+B*08:01",
+                "C*07:01+C*07:02"
+            ]
+        );
+        assert!(normalise_gl("A*01~B*08~A*02").is_err());
     }
 
     #[test]

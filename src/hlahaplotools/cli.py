@@ -1,4 +1,4 @@
-"""Command-line interface: `hlahaplotools {estimate,families,haplomat,summary}`."""
+"""Command-line interface: `hlahaplotools {estimate,families,stats,impute,haplomat,rename,summary}`."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from pathlib import Path
 from hlahaplotools._core import (
     Nomenclature,
     hardy_weinberg,
+    impute,
     linkage_disequilibrium,
     read_gls,
     read_glsc,
@@ -22,6 +23,7 @@ from hlahaplotools._core import (
     sniff_xml,
 )
 from hlahaplotools.correction import adjust_fdr
+from hlahaplotools.genotypes import read_genotypes, write_genotypes
 from hlahaplotools.multistart import estimate_multistart
 
 INITS = ["numberOccurrence", "perturbation", "equal", "random"]
@@ -69,7 +71,17 @@ def resolve_data_paths(args) -> tuple[Path, Path | None, dict]:
 # ---------------------------------------------------------------- running
 
 
-FORMATS = ["mac", "glsc", "gls", "hml", "ngsengine"]
+FORMATS = ["mac", "glsc", "gls", "hml", "ngsengine", "genotypes"]
+
+
+def load_nomenclature(nom_dir: Path, args=None) -> Nomenclature:
+    """Lookup tables, reading serological antigens or pre-2010 names if asked (--serology, --v2-names)."""
+    serology = bool(getattr(args, "serology", False))
+    v2 = bool(getattr(args, "v2_names", False))
+    try:
+        return Nomenclature(str(nom_dir), serology=serology, v2_names=v2)
+    except ValueError as e:
+        sys.exit(f"error: {e}")
 
 
 def xml_files(path: Path) -> list[Path]:
@@ -109,6 +121,13 @@ def read_input(
     include_unapproved: bool = False,
 ):
     fmt = fmt or guess_format(path)
+    if fmt == "genotypes":
+        ds, issues = read_genotypes(path, loci)
+        for line, sid, reason in issues[:5]:
+            print(f"warning: {path}:{line} {sid}: {reason}", file=sys.stderr)
+        if len(issues) > 5:
+            print(f"warning: {len(issues) - 5} more people left out of {path}", file=sys.stderr)
+        return ds, fmt
     mac_codes = str(mac) if mac and mac.exists() else None
     common = dict(mac_codes=mac_codes, loci=loci, half_typed=half_typed, drb345=drb345)
     if fmt == "gls":
@@ -178,12 +197,15 @@ def run_estimate(
     completion: str = "linked",
     glid: str | None = None,
     include_unapproved: bool = False,
+    serology: bool = False,
+    v2_names: bool = False,
+    out_genotypes: Path | None = None,
 ) -> int:
     say = (lambda *a: None) if quiet else print
     loci = [l for l, _ in loci_res]
     t0 = time.perf_counter()
     ds, fmt = read_input(input_path, fmt, mac, loci, half_typed, drb345, glid, include_unapproved)
-    nom = Nomenclature(str(nom_dir))
+    nom = load_nomenclature(nom_dir, argparse.Namespace(serology=serology, v2_names=v2_names))
     t1 = time.perf_counter()
     say(f"Read {len(ds)} samples from {input_path} ({fmt.upper()}); {len(ds.issues)} lines unreadable")
     describe_fills(ds.fill_counts(), say)
@@ -234,6 +256,10 @@ def run_estimate(
 
     out_freqs.parent.mkdir(parents=True, exist_ok=True)
     est.write_frequencies(str(out_freqs), cut=cut, renormalize=renormalize)
+    if out_genotypes:
+        out_genotypes.parent.mkdir(parents=True, exist_ok=True)
+        write_genotypes(out_genotypes, ds, nom, [r for _, r in loci_res], min_genotype_frequency)
+        say(f"Wrote each person's resolved genotypes to {out_genotypes}")
     if out_history:
         out_history.parent.mkdir(parents=True, exist_ok=True)
         est.write_history(str(out_history))
@@ -260,6 +286,8 @@ def run_estimate(
             "max_completions": max_completions,
             "starts": starts,
             "completion": completion,
+            "serology": serology,
+            "v2_names": v2_names,
         },
         "starts": [
             {"init": i, "seed": sd, "log_likelihood": ll, "iterations": it, "converged": cv}
@@ -368,6 +396,9 @@ def cmd_estimate(args) -> int:
         completion=args.completion,
         glid=args.glid,
         include_unapproved=args.include_unapproved,
+        serology=args.serology,
+        v2_names=args.v2_names,
+        out_genotypes=out_dir / "genotypes.dat" if args.write_genotypes else None,
     )
 
 
@@ -382,10 +413,19 @@ def read_parameters(path: str) -> dict[str, str]:
 
 
 def cmd_haplomat(args) -> int:
-    """Run from a Hapl-o-Mat parameter file (MAC, GLSC or GLS)."""
+    """Run from a Hapl-o-Mat parameter file (MAC, GLSC, GLS or READ)."""
     p = read_parameters(args.parameters)
     fmt = args.format.lower()
-    if fmt == "gls":
+    if fmt == "read":
+        # A genotype list written with WRITE_GENOTYPES: codes are already resolved.
+        input_path, glid, fmt = p["FILENAME_INPUT"], None, "genotypes"
+        first = next((l for l in Path(input_path).read_text().splitlines() if l.strip()), "")
+        if not first:
+            sys.exit(f"error: {input_path} is empty")
+        p.setdefault(
+            "LOCI_AND_RESOLUTIONS", ",".join(g.split("*", 1)[0] + ":asItIs" for g in first.split()[-1].split("^"))
+        )
+    elif fmt == "gls":
         input_path, glid = p["FILENAME_PULL"], p["FILENAME_GLID"]
         # Untyped loci (GL ID 0) are always kept as untyped, so this switch has no effect here.
         if p.get("RESOLVE_MISSING_GENOTYPES", "false").lower() == "true":
@@ -394,7 +434,6 @@ def cmd_haplomat(args) -> int:
         input_path, glid = p["FILENAME_INPUT"], None
     for key, what in [
         ("DO_AMBIGUITYFILTER", "the ambiguity filter"),
-        ("WRITE_GENOTYPES", "writing genotypes"),
         ("DO_ANALYTICS", "analytics"),
     ]:
         if p.get(key, "false").lower() == "true":
@@ -404,6 +443,7 @@ def cmd_haplomat(args) -> int:
     # Older Hapl-o-Mat parameter files count digits: 2d, 4d, 6d, 8d = 1f, 2f, 3f, 4f.
     old = {"2d": "1f", "4d": "2f", "6d": "3f", "8d": "4f"}
     loci_res = sorted((l, old.get(r, r)) for l, r in parse_loci(p["LOCI_AND_RESOLUTIONS"]))
+    write_geno = p.get("WRITE_GENOTYPES", "false").lower() == "true"
     return run_estimate(
         input_path=input_path,
         fmt=fmt,
@@ -425,6 +465,9 @@ def cmd_haplomat(args) -> int:
         quiet=args.quiet,
         half_typed=args.half_typed,
         drb345=not args.no_drb345,
+        serology=args.serology,
+        v2_names=args.v2_names,
+        out_genotypes=Path(p.get("FILENAME_GENOTYPES", "results/genotypes.dat")) if write_geno else None,
     )
 
 
@@ -482,7 +525,7 @@ def cmd_stats(args) -> int:
     ds, fmt = read_input(
         args.input, args.format, mac, loci, args.half_typed, not args.no_drb345, args.glid, args.include_unapproved
     )
-    nom = Nomenclature(str(nom_dir))
+    nom = load_nomenclature(nom_dir, args)
     res = [r for _, r in loci_res]
     say(f"Read {len(ds)} samples from {args.input} ({fmt.upper()}); {len(ds.issues)} lines unreadable")
     out = Path(args.output)
@@ -554,6 +597,129 @@ def cmd_stats(args) -> int:
     return 0
 
 
+def read_frequency_table(path: Path) -> list[tuple[str, float]]:
+    """hfs.dat: haplotype<TAB>frequency per line."""
+    out = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        parts = line.split()
+        try:
+            out.append((parts[0], float(parts[1])))
+        except IndexError, ValueError:
+            sys.exit(f"error: {path}:{n}: expected 'haplotype<TAB>frequency', got {line!r}")
+    return out
+
+
+def cmd_impute(args) -> int:
+    """Each person's most likely haplotype pairs and genotypes, from known haplotype frequencies.
+
+    Every pair of haplotypes in the frequency table that fits a person's typing gets the
+    probability f(h1) f(h2) (both orders when they differ), times the weight of the
+    typings it fits, normalised over the person's pairs: the imputation of GRIMM and
+    py-graph-imputation, here over a flat frequency table. Untyped or half-typed loci are
+    imputed from the haplotypes that fit the rest. With several --frequencies NAME=FILE,
+    each pair comes from one population, weighted by its --prior (default equal), and each
+    person's population posteriors are written too.
+
+    Loci and resolutions default to those in run.json next to the (first) frequency file,
+    so the typing is resolved as it was for the estimate. People whose typing no pair in
+    the table fits are listed in run.json.
+
+    Output: pairs.tsv (id, rank, population, haplotype_1, haplotype_2, probability),
+    genotypes.tsv (id, rank, genotype, probability), populations.tsv (with several
+    populations) and run.json.
+    """
+    say = (lambda *a: None) if args.quiet else print
+    pops = []
+    for spec in args.frequencies:
+        name, _, path = spec.rpartition("=")
+        path = Path(path)
+        if not path.exists():
+            sys.exit(f"error: frequency file {path} not found")
+        pops.append((name or path.parent.name or path.stem, path))
+    if len({n for n, _ in pops}) != len(pops):
+        sys.exit("error: give each --frequencies a distinct NAME=FILE")
+    priors = {}
+    for spec in args.prior or []:
+        name, _, w = spec.partition("=")
+        priors[name] = float(w)
+    unknown = set(priors) - {n for n, _ in pops}
+    if unknown:
+        sys.exit(f"error: --prior for unknown population(s) {sorted(unknown)}")
+    if args.loci:
+        loci_res = parse_loci(args.loci)
+    else:
+        run = pops[0][1].with_name("run.json")
+        if not run.exists():
+            sys.exit(f"error: no --loci given and no {run} to take them from")
+        loci_res = list(json.loads(run.read_text())["loci_and_resolutions"].items())
+    loci = [l for l, _ in loci_res]
+    nom_dir, mac, manifest = resolve_data_paths(args)
+    t0 = time.perf_counter()
+    ds, fmt = read_input(
+        args.input, args.format, mac, loci, args.half_typed, not args.no_drb345, args.glid, args.include_unapproved
+    )
+    nom = load_nomenclature(nom_dir, args)
+    tables = [(name, read_frequency_table(path), priors.get(name, 1.0)) for name, path in pops]
+    say(f"Read {len(ds)} samples from {args.input} ({fmt.upper()}); "
+        + ", ".join(f"{n}: {len(t):,} haplotypes" for n, t, _ in tables))  # fmt: skip
+    try:
+        rows, issues = impute(
+            ds, nom, tables, [r for _, r in loci_res], top=args.top, max_candidates=args.max_candidates,
+            threads=args.threads,
+        )  # fmt: skip
+    except ValueError as e:
+        sys.exit(f"error: {e}")
+    out = Path(args.output)
+    out.mkdir(parents=True, exist_ok=True)
+    _tsv(out / "pairs.tsv", ["id", "rank", "population", "haplotype_1", "haplotype_2", "probability"],
+         ([r["id"], k, *p] for r in rows for k, p in enumerate(r["pairs"], 1)))  # fmt: skip
+    _tsv(out / "genotypes.tsv", ["id", "rank", "genotype", "probability"],
+         ([r["id"], k, *g] for r in rows for k, g in enumerate(r["genotypes"], 1)))  # fmt: skip
+    if len(pops) > 1:
+        _tsv(out / "populations.tsv", ["id", "population", "posterior"],
+             ([r["id"], n, p] for r in rows for n, p in r["populations"]))  # fmt: skip
+    approx = sum(r["approximate"] for r in rows)
+    top1 = [r["pairs"][0][3] for r in rows]
+    info = {
+        "tool": "hlahaplotools",
+        "version": _version(),
+        "input": str(args.input),
+        "format": fmt,
+        "frequencies": {n: str(p) for n, p in pops},
+        "priors": {n: priors.get(n, 1.0) for n, _ in pops},
+        "loci_and_resolutions": dict(loci_res),
+        "imgthla_release": manifest.get("imgthla", {}).get("release") or nom.source,
+        "parameters": {
+            "top": args.top,
+            "max_candidates": args.max_candidates,
+            "serology": args.serology,
+            "v2_names": args.v2_names,
+            "half_typed": args.half_typed,
+        },  # fmt: skip
+        "samples_read": len(ds),
+        "samples_imputed": len(rows),
+        "samples_approximate": approx,
+        "unreadable_lines": [{"line": l, "id": i, "reason": r} for l, i, r in ds.issues],
+        "samples_left_out": [{"id": i, "reason": r} for _, i, r in issues],
+        "seconds": round(time.perf_counter() - t0, 3),
+    }
+    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n")
+    if rows:
+        top1.sort()
+        say(f"Imputed {len(rows):,} of {len(ds):,} people; median probability of the best pair "
+            f"{top1[len(top1) // 2]:.3f}; {len(issues)} left out (run.json)")  # fmt: skip
+    else:
+        say(f"No one could be imputed; {len(issues)} left out (run.json)")
+    if approx:
+        say(
+            f"  {approx} people had more than {args.max_candidates:,} candidate haplotypes; the most frequent were used"
+        )
+    say(f"Wrote pairs.tsv and genotypes.tsv to {out}")
+    return 0
+
+
 def _tsv(path: Path, header: list[str], rows) -> None:
     with path.open("w") as f:
         f.write("\t".join(header) + "\n")
@@ -602,7 +768,7 @@ def cmd_families(args) -> int:
         half_typed=args.half_typed,
         drb345=not args.no_drb345,
     )
-    nom = Nomenclature(str(nom_dir))
+    nom = load_nomenclature(nom_dir, args)
     fams = data.families()
     say(
         f"Read {len(data)} people in {len(fams)} families ({len(data.unrelated)} unrelated); "
@@ -757,6 +923,14 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--data-dir", help="folder with manifest.json (default: $HLAHAPLOTOOLS_DATA or ./data)")
         p.add_argument("--nomenclature", help="lookup tables folder (default: from the manifest)")
         p.add_argument("--mac-codes", help="NMDP alpha.v3.txt (default: from the manifest)")
+        p.add_argument(
+            "--serology",
+            action="store_true",
+            help="read typings that are serological antigens (B*62, DRB1*15) as their alleles (WMDA tables)",
+        )
+        p.add_argument(
+            "--v2-names", action="store_true", help="read pre-2010 allele names (A*0201, A*010101) as current names"
+        )
         fill_options(p)
 
     def fill_options(p):
@@ -812,6 +986,12 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--loci", required=True, help="loci and resolutions, e.g. A:g,B:g,C:g,DRB1:g")
     input_options(e)
     e.add_argument("-o", "--output", default="results", help="output folder (default: results)")
+    e.add_argument(
+        "--write-genotypes",
+        action="store_true",
+        help="also write each person's resolved genotypes to genotypes.dat (Hapl-o-Mat's WRITE_GENOTYPES; "
+        "read back with --format genotypes)",
+    )
     em_options(e)
     e.add_argument(
         "--starts",
@@ -878,9 +1058,41 @@ def build_parser() -> argparse.ArgumentParser:
     run_options(st)
     st.set_defaults(func=cmd_stats)
 
+    im = sub.add_parser(
+        "impute",
+        help="each person's most likely haplotype pairs and genotypes, from known frequencies",
+        description=cmd_impute.__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    im.add_argument("input", help="typing file, as for estimate")
+    im.add_argument(
+        "--frequencies",
+        action="append",
+        required=True,
+        metavar="[NAME=]FILE",
+        help="haplotype frequencies (hfs.dat); repeat with NAME=FILE for several populations",
+    )
+    im.add_argument("--prior", action="append", metavar="NAME=WEIGHT", help="population prior (default: equal)")
+    im.add_argument("--loci", help="loci and resolutions (default: from run.json next to the frequency file)")
+    input_options(im)
+    im.add_argument("-o", "--output", default="results/impute", help="output folder (default: results/impute)")
+    im.add_argument("--top", type=int, default=10, help="pairs and genotypes written per person (default 10)")
+    im.add_argument(
+        "--max-candidates",
+        type=int,
+        default=5000,
+        help="most candidate haplotypes per person and population; above it the most frequent are kept (default 5000)",
+    )
+    data_options(im)
+    im.add_argument("--threads", type=int, help="worker threads (default: all cores)")
+    im.add_argument("-q", "--quiet", action="store_true")
+    im.set_defaults(func=cmd_impute)
+
     h = sub.add_parser("haplomat", help="run from a Hapl-o-Mat parameter file")
     h.add_argument(
-        "format", choices=["MAC", "GLSC", "GLS", "mac", "glsc", "gls"], help="input format, as for Hapl-o-Mat"
+        "format",
+        choices=["MAC", "GLSC", "GLS", "READ", "mac", "glsc", "gls", "read"],
+        help="input format, as for Hapl-o-Mat",
     )
     h.add_argument("parameters", help="Hapl-o-Mat parameter file, e.g. parametersMAC")
     data_options(h)

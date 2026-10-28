@@ -8,11 +8,12 @@ HLAhaploTools estimates HLA haplotype frequencies from population and family typ
 ## Key strengths
 
 - **Laboratory reports as input**: MAC and GL string tables, GL identifier (GLS) pull and GLID files, NMDP HML files, and GenDx NGSengine XML exports, read with all their ambiguity.
-- **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`), allele lists (`02:01/02:02`), GL strings, and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release.
+- **Ambiguous typings**: NMDP multiple-allele codes (`24:DXTW`, `01:XX`), allele lists (`02:01/02:02`), GL strings (phased ones too), and g, G and P groups, resolved against a pinned IPD-IMGT/HLA release. Serological antigens (`B62`) and pre-2010 allele names (`A*0201`) can be read as well.
 - **Any target resolution**: per locus: first to fourth field, g, G or P groups, or alleles exactly as typed.
 - **Incomplete typing**: samples with an untyped locus, or with only one allele typed at a locus, are kept in the estimate instead of discarded.
 - **HLA reporting conventions**: a blank second allele is read as homozygous, and blank DRB3, DRB4 and DRB5 cells are filled from the DRB1 typing (absent genes included). In families, a homozygous reading that breaks Mendelian inheritance is undone.
-- **Population statistics**: Hardy–Weinberg exact tests per locus, and linkage disequilibrium (D′, Wn and a permutation test) per pair of loci, estimated from incompletely typed people too.
+- **Population statistics**: Hardy–Weinberg exact tests per locus, and linkage disequilibrium (D′, Wn and a permutation test) per pair of loci, estimated from incompletely typed people too, with false-discovery-rate adjusted P-values.
+- **Imputation**: each person's most likely haplotype pairs and genotypes from known haplotype frequencies (one or several populations), including the loci they were not typed at.
 - **Family data**: Mendel checks, phasing of parents from their children (including untyped parents), estimation from founders only, and checks that flag non-paternity, sample swaps, copied rows, non-siblings and recombinants.
 - **Reproducible**: results are bit-identical on any number of threads, and every run records the IMGT/HLA release, MAC table date and all parameters.
 
@@ -182,13 +183,23 @@ GL ID `0` means the locus was not typed; the person is kept with that locus unty
 
 ### HML (`.hml`)
 
-NMDP Histoimmunogenetics Markup Language, versions 1.0 and 1.0.1. Each `<sample id=...>` gives one person; each `<allele-assignment>` gives one locus, from its `<glstring>` or, when there is none, from its `<haploid>` alleles. A folder of HML files (often one per person) can be given as the input. Genotype lists (`|`) and allele lists (`/`) are kept in full and weighed by the EM, so no ambiguity is resolved by hand.
+NMDP Histoimmunogenetics Markup Language, versions 1.0 and 1.0.1. Each `<sample id=...>` gives one person; each `<allele-assignment>` gives one locus, from its `<glstring>` or, when there is none, from its `<haploid>` alleles. A folder of HML files (often one per person) can be given as the input. Genotype lists (`|`) and allele lists (`/`) are kept in full and weighed by the EM, so no ambiguity is resolved by hand. A GL string given only by its URI (`<glstring uri="..."/>`) cannot be read offline; the locus is left untyped and listed, so resolve such URIs with the GL service and give the GL string as text.
+
+In any GL string input (GL string tables, HML, NGSengine), a phased GL string, with `~` joining the loci of one haplotype (`A*01:01~B*08:01+A*02:01~B*07:02`), is read without its phase: each locus becomes an unphased genotype, and the person is listed with a note. The estimate then infers the phase like any other.
 
 ### NGSengine XML export (`.xml`)
 
 The project export of GenDx NGSengine (`<ProjectXml>`, the TARR layout). For each `<Locus>`, the reviewed result in `<ConclusiveTypingResult>` is read for its `<SampleName>`. Locus results whose review status is not `Approved` (for example `Rejected`) and loci with no conclusive result are left untyped, and each is listed on screen and in `run.json`; `--include-unapproved` reads them anyway. Several exports, or a folder of them, can be read together. The file is read as a stream, so a 150 MB export with sequences takes a few seconds and little memory.
 
 The layout of `.xml` and `.hml` files is recognised from their content; `--format hml` or `--format ngsengine` overrides it. If the same person and locus appear twice with different results, the locus is left untyped and listed.
+
+### Genotype list (`--format genotypes`)
+
+The resolved genotypes written by `estimate --write-genotypes` (Hapl-o-Mat's `WRITE_GENOTYPES` output and `READ` input): one line per possible multilocus genotype of a person, `id<TAB>type<TAB>weight<TAB>A*01:01g+A*02:01g^B*08:01g+B*07:02g`, a person's weights summing to 1 and an unknown copy written `A*?`. The codes are already resolved, so estimate it with `asItIs` at every locus; the result is the same as from the original input. A person's lines must be all combinations of per-locus genotypes with weights that multiply (as written by either tool); others are left out with a warning.
+
+### Serological antigens and pre-2010 names
+
+A typing that is a serological antigen entered as an allele (`B*62`, `DRB1*15`, or `62` in a B column) or a pre-2010 name (`A*0201`, `A*010101`) is not an IMGT/HLA allele name. By default such a person is left out, with a message saying what the typing looks like; a one-field typing that is neither (`DRB1*92`) is reported as such too. `--serology` reads antigens as the alleles that carry them, from the WMDA tables (`rel_dna_ser.txt`, with broad antigens covering their splits and associated antigens from `rel_ser_ser.txt`), each allele with an equal share; `--v2-names` reads pre-2010 names as their current names (`Nomenclature_2009.txt`). An allele group that exists (`A*02`) is always read as alleles, never as an antigen. Antigen typings carry little information at the allele level, so expect broad frequencies for the people typed this way.
 
 ### Family table (`.csv`, `.tsv`)
 
@@ -220,6 +231,7 @@ Each locus is resolved to a target resolution, given as `LOCUS:RESOLUTION` (e.g.
 | `g` | g group (identical antigen-recognition domains, nulls included) | `A*02:01g` |
 | `G` | G group (identical exons 2 and 3, or 2 for class II) | `A*02:01:01G` |
 | `P` | P group (identical protein in the antigen-recognition domains) | `A*02:01P` |
+| `lgx` | g group named by its two fields, without the `g` (py-ard's `lgx`; `lg` is the same as `g`) | `A*02:01` |
 | `asItIs` | Typings used exactly as written, without lookup | `A*02:01:01:01` |
 
 A typing that covers several alleles at the target resolution (e.g. `A*02` at `2f`, or a MAC code) contributes to each with equal weight. Expression suffixes (N, L, S, Q) are kept. Every locus in the IPD-IMGT/HLA allele list can be resolved, including MICA, MICB and the non-classical and pseudogene loci (E, F, G, H, J, K, L, DQA2, TAP1, ...), so haplotypes can extend beyond the classical loci. IMGT/HLA defines G and P groups only for the classical and E/F/G-type loci; for the others, use `1f` to `4f` or `g` (the 2-field name). Loci not in the list at all can still be used with `asItIs`.
@@ -229,8 +241,9 @@ A typing that covers several alleles at the target resolution (e.g. `A*02` at `2
 ```bash
 uv run hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]   # population data
 uv run hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]   # family data
-uv run hlahaplotools haplomat  MAC|GLSC|GLS PARAMETER_FILE             # run from a parameter file
+uv run hlahaplotools haplomat  MAC|GLSC|GLS|READ PARAMETER_FILE        # run from a parameter file
 uv run hlahaplotools stats     INPUT --loci A:2f,B:2f,... [-o results/stats]  # Hardy–Weinberg and LD
+uv run hlahaplotools impute    INPUT --frequencies hfs.dat [-o results/impute]  # each person's haplotype pairs
 uv run hlahaplotools summary   INPUT                                   # describe an input file
 uv run hlahaplotools rename    INPUT OUTPUT                            # update retired allele names
 ```
@@ -241,7 +254,7 @@ Options for `estimate` and `families`:
 | --------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `--loci`                                          | required                    | Loci and resolutions, e.g. `A:g,C:g,B:g,DRB1:g`                                                                                     |
 | `-o`, `--output`                                | `results`                 | Output folder                                                                                                                         |
-| `--format`                                        | from extension or content   | `mac`, `glsc`, `gls`, `hml` or `ngsengine` (`estimate` and `summary`)                                                   |
+| `--format`                                        | from extension or content   | `mac`, `glsc`, `gls`, `hml`, `ngsengine` or `genotypes` (`estimate` and `summary`)                                      |
 | `--glid`                                          | pull file with `.glid`    | GLS input: the GLID file                                                                                                              |
 | `--include-unapproved`                            | off                         | NGSengine input: also read locus results not approved in review                                                                       |
 | `--epsilon`                                       | `1e-6`                    | Stop when no haplotype frequency changes by more than this                                                                            |
@@ -256,11 +269,16 @@ Options for `estimate` and `families`:
 | `--threads`                                       | all cores                   | Worker threads; results do not depend on it                                                                                           |
 | `--half-typed`                                    | `homozygous`              | One allele typed, the other blank: `homozygous` (copy it) or `unknown`                                                            |
 | `--no-drb345`                                     | off                         | Do not fill DRB3/4/5 from DRB1                                                                                                        |
+| `--serology`                                      | off                         | Read typings that are serological antigens (`B*62`) as their alleles                                                                |
+| `--v2-names`                                      | off                         | Read pre-2010 allele names (`A*0201`) as current names                                                                              |
+| `--write-genotypes`                               | off                         | `estimate` only: also write each person's resolved genotypes to `genotypes.dat`                                                   |
 | `--no-family-phase`                               | off                         | `families` only: estimate from founders as unrelated people                                                                         |
 | `--cross-family-duplicates`                       | off                         | `families` only: also flag identical people in different families                                                                   |
 | `--data-dir`, `--nomenclature`, `--mac-codes` | from `data/manifest.json` | Reference data locations                                                                                                              |
 
-`haplomat` runs from an existing Hapl-o-Mat parameter file, with a single EM start, so earlier analyses can be repeated unchanged; options it does not implement are ignored with a warning.
+`haplomat` runs from an existing Hapl-o-Mat parameter file, with a single EM start, so earlier analyses can be repeated unchanged. `WRITE_GENOTYPES=true` writes the genotype list to `FILENAME_GENOTYPES`, and `READ` estimates from such a list. The ambiguity filter (`DO_AMBIGUITYFILTER`) and the haplotype analytics (`DO_ANALYTICS`) are not implemented, and are ignored with a warning: ambiguity is kept in full and weighed by the EM instead.
+
+`impute` gives each person's most likely haplotype pairs and multilocus genotypes from a frequency table (`hfs.dat` from `estimate`, or any `haplotype<TAB>frequency` file), as GRIMM and py-graph-imputation do. Loci and resolutions are taken from the `run.json` beside the frequency file unless `--loci` is given, so the typing is resolved as it was for the estimate. Repeat `--frequencies NAME=FILE` for several populations (with `--prior NAME=WEIGHT`, default equal) to also get each person's population posteriors. `--top` (default 10) sets how many pairs and genotypes are written per person; `--max-candidates` (default 5,000) caps the haplotypes considered per person, keeping the most frequent.
 
 `rename` rewrites a typing file (MAC, GLSC or family table) with current IMGT/HLA names. Alleles deleted or renamed since the typing was reported (e.g. `C*04:09N`, now `C*04:09L`, or `B*47:01:01:01`, now `B*47:01:01:03`) are replaced with the name `Deleted_alleles.txt` gives for them, following chains of renames, and everything else is written unchanged. The changes are listed in `OUTPUT.renames.tsv`. Without this step, a person with a retired name is left out of the estimate and reported in `run.json`.
 
@@ -290,6 +308,15 @@ The exit status is 0 on success and 2 if the EM did not converge.
 | `diplotypes.tsv`           | Most likely haplotype pair per founder, with its posterior probability                                                                                                                   |
 | `comparison.json`          | EM on founders as unrelated people compared with the family phasing (meaningful for larger cohorts)                                                                                      |
 | `run.json`                 | As for `estimate`, plus family counts, phasing status counts and flag counts                                                                                                           |
+
+### `impute`
+
+| File               | Contents |
+| ------------------ | -------- |
+| `pairs.tsv`        | Per person: rank, population, the two haplotypes and the probability of the pair, most likely first |
+| `genotypes.tsv`    | Per person: rank, multilocus unphased genotype (`A*01:01+A*02:01^B*...`) and its probability, summed over the pairs that give it |
+| `populations.tsv`  | With several populations: each person's posterior for each |
+| `run.json`         | Inputs, frequency files and priors, loci, parameters, people imputed, and the people left out with the reason (unreadable typing, or no pair in the table that fits it) |
 
 ### `stats`
 
@@ -385,6 +412,10 @@ Each child is compared with haplotypes phased from the rest of its family, leavi
 **Linkage disequilibrium.** For each pair of loci, haplotype frequencies are estimated by EM from everyone typed at either locus. With allele frequencies p and q and D = p_ab − p_a q_b: D′ for an allele pair divides D by its largest possible value with the same sign; the overall D′ (Hedrick) is Σ p_a q_b |D′_ab|; and Wn (Cohen) is √(Σ D²/(p_a q_b) / (min(k, l) − 1)), Cramér's V of the haplotype table, 0 under equilibrium and 1 when each allele at one locus goes with one at the other. With `--ld-permutations N`, linkage equilibrium is tested by permutation: one locus is shuffled across people, which keeps each locus's own data but breaks any association, the two-locus likelihood is re-estimated, and P is the share of the N shuffled datasets that fit at least as well as the real one (each needs an EM, so this takes time). The likelihood-ratio statistic 2(logL₂ − logL_A − logL_B) is also written, with its nominal (k − 1)(l − 1) degrees of freedom, but no χ² P-value: HLA loci at two fields have hundreds of mostly rare alleles, and the χ² approximation then fails.
 
 **Multiple testing.** A run tests many loci and pairs at once, so `hwe.tsv` and `ld.tsv` also give `q_value`, the Benjamini–Hochberg false-discovery-rate adjusted P across the loci or pairs of that run; report it rather than the raw P. A permutation P cannot be smaller than 1/(N + 1), so choose N large enough for the corrected threshold: with 55 pairs, 999 permutations give P ≥ 0.001, above a Bonferroni threshold of 0.05/55 ≈ 0.0009, while 1,999 permutations give P ≥ 0.0005.
+
+### Imputation
+
+For a person with possible genotypes g (with weights w, from their typing), every pair of haplotypes h₁, h₂ in the frequency table gets P(h₁, h₂) ∝ f(h₁) f(h₂) Σ_orders Π_loci Σ_g w · [h₁, h₂ fit g], over both orders when h₁ ≠ h₂, normalised over the person's pairs. Untyped and half-typed loci constrain only the typed allele, so the pairs impute the rest. With several populations, both haplotypes of a pair come from one population, weighted by its prior, and the population posteriors are the shares of the pairs from each. Only haplotypes in the table can be proposed, so a person whose typing no pair fits gets no result. Candidates are found from the most selective typed locus and checked at every locus, so about 15,000 people take a few seconds with four loci and under half a minute with eleven. A frequency table cut at a small frequency (`--cut`) lacks the rarest haplotypes, so people who carry one are left out; impute from an uncut table (`--cut 0`) to keep them.
 
 ### Determinism
 

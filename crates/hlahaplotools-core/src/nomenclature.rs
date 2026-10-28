@@ -93,6 +93,21 @@ pub struct Nomenclature {
     pub p: GroupTable,
     /// Free-text label for where the tables came from, e.g. "IPD-IMGT/HLA 3.66.0".
     pub source: Option<String>,
+    /// Serological antigen written as a typing (`B*62`) -> full allele names
+    /// (WMDA rel_dna_ser and rel_ser_ser; `Serology.txt`, optional).
+    serology: HashMap<String, Vec<String>>,
+    /// Pre-2010 (V2) name (`A*0201`, `A*010101`) -> current name (`V2.txt`, optional).
+    v2: HashMap<String, String>,
+    /// Read typings that are serological antigens as their alleles.
+    pub read_serology: bool,
+    /// Read pre-2010 names as their current names.
+    pub read_v2: bool,
+}
+
+/// What an unknown typing looks like, to explain why it cannot be used.
+pub(crate) enum Lookalike<'a> {
+    Serology(&'a [String]),
+    V2(&'a str),
 }
 
 fn read_rows(path: &Path) -> Result<Vec<(String, Vec<String>)>, Error> {
@@ -109,6 +124,15 @@ fn read_rows(path: &Path) -> Result<Vec<(String, Vec<String>)>, Error> {
     Ok(rows)
 }
 
+/// Rows of a table that may be absent (older data folders lack it).
+fn read_optional(path: &Path) -> Result<Vec<(String, Vec<String>)>, Error> {
+    if path.exists() {
+        read_rows(path)
+    } else {
+        Ok(Vec::new())
+    }
+}
+
 impl Nomenclature {
     /// Load the four tables from a folder (e.g. `data/derived/3.66.0`).
     pub fn from_dir(dir: impl AsRef<Path>) -> Result<Self, Error> {
@@ -122,6 +146,15 @@ impl Nomenclature {
             large_g: GroupTable::from_rows(read_rows(&dir.join("LargeG.txt"))?, None),
             p: GroupTable::from_rows(read_rows(&dir.join("P.txt"))?, Some('P')),
             source: dir.file_name().map(|n| n.to_string_lossy().into_owned()),
+            serology: read_optional(&dir.join("Serology.txt"))?
+                .into_iter()
+                .collect(),
+            v2: read_optional(&dir.join("V2.txt"))?
+                .into_iter()
+                .filter_map(|(k, mut v)| v.pop().map(|n| (k, n)))
+                .collect(),
+            read_serology: false,
+            read_v2: false,
         })
     }
 
@@ -137,8 +170,37 @@ impl Nomenclature {
             small_g: GroupTable::from_rows(small_g, Some('g')),
             large_g: GroupTable::from_rows(large_g, None),
             p: GroupTable::from_rows(p, Some('P')),
-            source: None,
+            ..Default::default()
         }
+    }
+
+    /// Add serological antigens and pre-2010 names (used by tests).
+    pub fn with_lookalikes(
+        mut self,
+        serology: Vec<(String, Vec<String>)>,
+        v2: Vec<(String, String)>,
+    ) -> Self {
+        self.serology = serology.into_iter().collect();
+        self.v2 = v2.into_iter().collect();
+        self
+    }
+
+    /// Whether the serological-antigen table was found.
+    pub fn has_serology(&self) -> bool {
+        !self.serology.is_empty()
+    }
+
+    /// Whether the pre-2010 name table was found.
+    pub fn has_v2(&self) -> bool {
+        !self.v2.is_empty()
+    }
+
+    /// A typing that is not an allele name but a pre-2010 name or a serological antigen.
+    pub(crate) fn lookalike(&self, code: &str) -> Option<Lookalike<'_>> {
+        if let Some(new) = self.v2.get(code) {
+            return Some(Lookalike::V2(new));
+        }
+        self.serology.get(code).map(|a| Lookalike::Serology(a))
     }
 
     /// Full allele names covered by a typing prefix such as `A*01:01`.

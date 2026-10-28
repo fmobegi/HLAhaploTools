@@ -393,11 +393,28 @@ mod _core {
 
     #[pymethods]
     impl Nomenclature {
+        /// `serology=True` reads typings that are serological antigens (`B*62`) as their
+        /// alleles, `v2_names=True` reads pre-2010 names (`A*0201`) as their current
+        /// names; otherwise such typings are rejected with a message saying what they are.
         #[new]
-        fn new(path: PathBuf) -> PyResult<Self> {
-            Ok(Self {
-                inner: hh::Nomenclature::from_dir(path).map_err(to_py_err)?,
-            })
+        #[pyo3(signature = (path, *, serology=false, v2_names=false))]
+        fn new(path: PathBuf, serology: bool, v2_names: bool) -> PyResult<Self> {
+            let mut inner = hh::Nomenclature::from_dir(path).map_err(to_py_err)?;
+            if serology && !inner.has_serology() {
+                return Err(PyValueError::new_err(
+                    "serology=True needs Serology.txt in the nomenclature folder; rebuild it with \
+                     scripts/build_nomenclature.py",
+                ));
+            }
+            if v2_names && !inner.has_v2() {
+                return Err(PyValueError::new_err(
+                    "v2_names=True needs V2.txt in the nomenclature folder; rebuild it with \
+                     scripts/build_nomenclature.py",
+                ));
+            }
+            inner.read_serology = serology;
+            inner.read_v2 = v2_names;
+            Ok(Self { inner })
         }
 
         /// Folder name the tables came from (usually the IMGT/HLA release).
@@ -700,6 +717,93 @@ mod _core {
         let (ds, nom) = (&dataset.inner, &nomenclature.inner);
         let inner = run_detached(py, threads, || hh::estimate(ds, nom, &res, &opts))?;
         Ok(Estimate { inner })
+    }
+
+    /// Every resolved genotype of every sample, as Hapl-o-Mat writes them with
+    /// WRITE_GENOTYPES: (rows, issues), rows as (id, [(type, genotype, weight), ...]).
+    #[pyfunction]
+    #[pyo3(signature = (dataset, nomenclature, resolutions=None, *, min_genotype_frequency=1e-5))]
+    #[allow(clippy::type_complexity)]
+    fn resolved_genotypes(
+        py: Python<'_>,
+        dataset: &Dataset,
+        nomenclature: &Nomenclature,
+        resolutions: Option<&Bound<'_, PyAny>>,
+        min_genotype_frequency: f64,
+    ) -> PyResult<(
+        Vec<(String, Vec<(String, String, f64)>)>,
+        Vec<(usize, Option<String>, String)>,
+    )> {
+        let res = resolutions_or_g(&dataset.inner.loci, resolutions)?;
+        let (ds, nom) = (&dataset.inner, &nomenclature.inner);
+        let (rows, issues) = run_detached(py, None, || {
+            hh::resolved_genotypes(ds, nom, &res, min_genotype_frequency)
+        })?;
+        Ok((rows, issues_to_py(&issues)))
+    }
+
+    // ------------------------------------------------------------ imputation
+
+    /// Per-person haplotype pairs from known frequencies (GRIMM-style imputation).
+    ///
+    /// `populations`: list of (name, [(haplotype, frequency), ...], prior). Haplotype names
+    /// join the loci of `dataset` in its order with `~`. Returns (results, issues): one dict
+    /// per person with id, pairs [(population, haplotype_1, haplotype_2, probability)],
+    /// genotypes [(genotype, probability)], populations [(name, posterior)], n_pairs and
+    /// approximate; issues are (line, id, reason) for people with no result.
+    #[pyfunction]
+    #[pyo3(signature = (dataset, nomenclature, populations, resolutions=None, *, top=10, max_candidates=5000, threads=None))]
+    #[allow(clippy::too_many_arguments, clippy::type_complexity)]
+    fn impute<'py>(
+        py: Python<'py>,
+        dataset: &Dataset,
+        nomenclature: &Nomenclature,
+        populations: Vec<(String, Vec<(String, f64)>, f64)>,
+        resolutions: Option<&Bound<'_, PyAny>>,
+        top: usize,
+        max_candidates: usize,
+        threads: Option<usize>,
+    ) -> PyResult<(
+        Vec<Bound<'py, PyDict>>,
+        Vec<(usize, Option<String>, String)>,
+    )> {
+        let res = resolutions_or_g(&dataset.inner.loci, resolutions)?;
+        let pops: Vec<hh::Population> = populations
+            .into_iter()
+            .map(|(name, haplotypes, prior)| hh::Population {
+                name,
+                haplotypes,
+                prior,
+            })
+            .collect();
+        let opts = hh::ImputeOptions {
+            top,
+            max_candidates,
+        };
+        let (ds, nom) = (&dataset.inner, &nomenclature.inner);
+        let (out, issues) = run_detached(py, threads, || hh::impute(ds, nom, &res, &pops, &opts))?;
+        let rows = out
+            .into_iter()
+            .map(|r| {
+                let d = PyDict::new(py);
+                d.set_item("id", r.sample_id)?;
+                let pairs: Vec<(String, String, String, f64)> = r
+                    .pairs
+                    .into_iter()
+                    .map(|p| {
+                        let [a, b] = p.haplotypes;
+                        (p.population, a, b, p.probability)
+                    })
+                    .collect();
+                d.set_item("pairs", pairs)?;
+                d.set_item("genotypes", r.genotypes)?;
+                d.set_item("populations", r.populations)?;
+                d.set_item("n_pairs", r.n_pairs)?;
+                d.set_item("approximate", r.approximate)?;
+                Ok(d)
+            })
+            .collect::<PyResult<_>>()?;
+        Ok((rows, issues_to_py(&issues)))
     }
 
     // ------------------------------------------------------------ families

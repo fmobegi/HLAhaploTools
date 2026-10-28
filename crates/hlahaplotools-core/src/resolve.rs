@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-use crate::nomenclature::{Nomenclature, cut_keeping_letter};
+use crate::nomenclature::{Lookalike, Nomenclature, cut_keeping_letter};
 
 /// Target resolution for one locus (Hapl-o-Mat's names in brackets).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -24,8 +24,11 @@ pub enum Resolution {
     ThreeField,
     /// Four fields (`4f`).
     FourField,
-    /// Small g groups (`g`).
+    /// Small g groups (`g`; py-ard's `lg`).
     SmallG,
+    /// Small g groups named by their two fields, without the `g` (py-ard's `lgx`):
+    /// `A*01:01g` becomes `A*01:01`.
+    SmallGx,
     /// G groups (`G`).
     LargeG,
     /// P groups (`P`).
@@ -42,13 +45,14 @@ impl FromStr for Resolution {
             "2f" => Resolution::TwoField,
             "3f" => Resolution::ThreeField,
             "4f" => Resolution::FourField,
-            "g" => Resolution::SmallG,
+            "g" | "lg" => Resolution::SmallG,
+            "lgx" => Resolution::SmallGx,
             "G" => Resolution::LargeG,
             "P" => Resolution::P,
             "asItIs" => Resolution::AsItIs,
             other => {
                 return Err(format!(
-                    "unknown resolution {other:?} (use 1f, 2f, 3f, 4f, g, G, P or asItIs)"
+                    "unknown resolution {other:?} (use 1f, 2f, 3f, 4f, g, lgx, G, P or asItIs)"
                 ));
             }
         })
@@ -63,6 +67,7 @@ impl fmt::Display for Resolution {
             Resolution::ThreeField => "3f",
             Resolution::FourField => "4f",
             Resolution::SmallG => "g",
+            Resolution::SmallGx => "lgx",
             Resolution::LargeG => "G",
             Resolution::P => "P",
             Resolution::AsItIs => "asItIs",
@@ -144,9 +149,60 @@ pub fn translate(
     if target == R::AsItIs {
         return Ok(vec![(code.to_owned(), 1.0)]);
     }
+    if target == R::SmallGx {
+        let mut out = Weighted::default();
+        for (c, w) in translate(nom, code, R::SmallG)? {
+            out.add(c.strip_suffix('g').map_or(c.clone(), str::to_owned), w);
+        }
+        return Ok(out.codes);
+    }
     let precision = precision_of(code)?;
+    if matches!(precision, Fields(_)) && nom.expand(code).is_none() {
+        match nom.lookalike(code) {
+            Some(Lookalike::V2(new)) if nom.read_v2 => return translate(nom, new, target),
+            Some(Lookalike::V2(new)) => {
+                return Err(format!(
+                    "{code} is a pre-2010 allele name (now {new}); rename it, or read such \
+                     names with --v2-names"
+                ));
+            }
+            Some(Lookalike::Serology(alleles)) if nom.read_serology => {
+                // Each allele carrying the antigen gets an equal share, as for a
+                // first-field typing.
+                let share = 1.0 / alleles.len() as f64;
+                let mut out = Weighted::default();
+                for a in alleles {
+                    for (c, w) in translate(nom, a, target)? {
+                        out.add(c, w * share);
+                    }
+                }
+                return Ok(out.codes);
+            }
+            Some(Lookalike::Serology(alleles)) => {
+                let (locus, antigen) = code.split_once('*').unwrap_or(("", code));
+                return Err(format!(
+                    "{code} is not an allele name: it looks like the serological antigen \
+                     {locus}{antigen} ({} alleles). Give the allele typing, or read antigens \
+                     as their alleles with --serology",
+                    alleles.len()
+                ));
+            }
+            None => {}
+        }
+    }
 
-    let missing = |table: &str| format!("{code} is not in {table} (check the IMGT/HLA release)");
+    let missing = |table: &str| {
+        // A one-field typing with no alleles (`DRB1*92`) is often a serological
+        // antigen entered as an allele, or a typo.
+        if matches!(precision, Fields(1)) && table == "AllAllelesExpanded" {
+            format!(
+                "{code} is not an allele group in {table}; if it was meant as a serological \
+                 antigen, give the allele typing instead (no antigen has this number either)"
+            )
+        } else {
+            format!("{code} is not in {table} (check the IMGT/HLA release)")
+        }
+    };
     let expand = |c: &str| {
         nom.expand(c)
             .ok_or_else(|| missing("AllAllelesExpanded"))
@@ -260,7 +316,7 @@ pub fn translate(
             Weighted::spread(codes)
         }
 
-        (R::AsItIs, _) => unreachable!("handled above"),
+        (R::AsItIs | R::SmallGx, _) => unreachable!("handled above"),
     })
 }
 
@@ -331,6 +387,41 @@ mod tests {
     }
 
     #[test]
+    fn serological_antigens_and_v2_names() {
+        let mut nom = toy().with_lookalikes(
+            vec![
+                ("A*01".into(), s(&["A*01:02"])),
+                ("A*36".into(), s(&["A*01:01:01:01", "A*01:02"])),
+            ],
+            vec![("A*0102".into(), "A*01:02".into())],
+        );
+        // A known allele group is never read as an antigen.
+        assert_eq!(
+            translate(&nom, "A*01", Resolution::TwoField).unwrap().len(),
+            3
+        );
+        let err = translate(&nom, "A*36", Resolution::TwoField).unwrap_err();
+        assert!(
+            err.contains("serological antigen A36") && err.contains("--serology"),
+            "{err}"
+        );
+        let err = translate(&nom, "A*0102", Resolution::TwoField).unwrap_err();
+        assert!(err.contains("pre-2010") && err.contains("A*01:02"), "{err}");
+        let err = translate(&nom, "A*92", Resolution::TwoField).unwrap_err();
+        assert!(err.contains("meant as a serological antigen"), "{err}");
+        nom.read_serology = true;
+        nom.read_v2 = true;
+        assert_eq!(
+            translate(&nom, "A*36", Resolution::TwoField).unwrap(),
+            [("A*01:01".into(), 0.5), ("A*01:02".into(), 0.5)]
+        );
+        assert_eq!(
+            translate(&nom, "A*0102", Resolution::TwoField).unwrap(),
+            [("A*01:02".into(), 1.0)]
+        );
+    }
+
+    #[test]
     fn groups_and_errors() {
         let nom = toy();
         assert_eq!(
@@ -347,6 +438,11 @@ mod tests {
             [("A*99:01".into(), 1.0)]
         );
         assert_eq!("g".parse::<Resolution>(), Ok(Resolution::SmallG));
+        assert_eq!("lg".parse::<Resolution>(), Ok(Resolution::SmallG));
+        assert_eq!(
+            translate(&nom, "A*01:01:01G", Resolution::SmallGx).unwrap(),
+            [("A*01:01".into(), 1.0)]
+        );
         assert!("6d".parse::<Resolution>().is_err());
     }
 }

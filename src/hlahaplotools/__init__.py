@@ -31,6 +31,7 @@ from hlahaplotools._core import (
     estimate,
     estimate_families,
     hardy_weinberg,
+    impute,
     linkage_disequilibrium,
     phase_families,
     read_family_table,
@@ -39,10 +40,12 @@ from hlahaplotools._core import (
     read_hml,
     read_mac,
     read_ngsengine,
+    resolved_genotypes,
     sniff_xml,
 )
 from hlahaplotools.cli import main
 from hlahaplotools.correction import adjust_fdr
+from hlahaplotools.genotypes import read_genotypes, write_genotypes
 from hlahaplotools.multistart import estimate_multistart
 
 __all__ = [
@@ -61,6 +64,7 @@ __all__ = [
     "estimate_families",
     "estimate_multistart",
     "hardy_weinberg",
+    "impute",
     "linkage_disequilibrium",
     "main",
     "phase_families",
@@ -69,6 +73,9 @@ __all__ = [
     "read_gls",
     "read_hml",
     "read_mac",
+    "read_genotypes",
     "read_ngsengine",
+    "resolved_genotypes",
     "sniff_xml",
+    "write_genotypes",
 ]

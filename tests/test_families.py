@@ -233,3 +233,26 @@ def test_low_resolution_typing_is_fast_and_left_unphased(nom, tmp_path):
     assert "B*07:02" in f1.haplotypes[0] + f1.haplotypes[1]
     assert not any("too many possibilities" in n for n in f2.notes)
     assert h.check_mendelian(fam, nom, "2f") == []
+
+
+@needs_derived
+def test_blank_parent_row_is_not_flagged(tmp_path):
+    """A parent row left blank (untyped, kept to place the children) is not a pedigree problem."""
+    import csv
+
+    rows = list(csv.reader((ROOT / "examples" / "families" / "family_typing_data.csv").open(encoding="utf-8-sig")))
+    fam = [rows[0]] + [r for r in rows[1:] if r[0] == "Family1"]
+    for r in fam[1:]:
+        if r[1] == "M":
+            r[2:] = ["NA"] * (len(r) - 2)
+    src = tmp_path / "blank.csv"
+    with src.open("w", newline="") as f:
+        csv.writer(f).writerows(fam)
+    out = tmp_path / "out"
+    r = subprocess.run(
+        [sys.executable, "-m", "hlahaplotools", "families", str(src), "--loci", "A:g,B:g,DRB1:g", "-o", str(out),
+         "--nomenclature", str(DERIVED), "-q"],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    assert r.returncode in (0, 2), r.stderr
+    assert "no typed loci" not in (out / "flags.tsv").read_text()

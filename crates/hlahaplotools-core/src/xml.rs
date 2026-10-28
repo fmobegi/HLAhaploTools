@@ -269,10 +269,16 @@ fn collect_hml<R: BufRead>(reader: R, label: &str, out: &mut Collected) -> Resul
                         text.clear();
                         in_glstring = !empty;
                         if empty
-                            && attr(e, "uri").is_some()
+                            && let Some(uri) = attr(e, "uri")
                             && let Some(s) = &sample
                         {
-                            out.note(s, "GL string given only as a URI; not read".into());
+                            out.note(
+                                s,
+                                format!(
+                                    "GL string given only as a URI ({uri}); not read. Resolve it \
+                                     with the GL service and give the GL string as text"
+                                ),
+                            );
                         }
                     }
                     "haploid" => {

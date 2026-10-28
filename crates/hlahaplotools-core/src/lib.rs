@@ -17,6 +17,7 @@ pub mod error;
 pub mod estimate;
 pub mod family;
 pub mod fill;
+pub mod impute;
 pub mod intern;
 pub mod mac;
 pub mod nomenclature;
@@ -30,13 +31,17 @@ pub mod xml;
 pub use audit::{AuditOptions, FlagKind, PedigreeFlag, audit_families};
 pub use dataset::{Dataset, Issue, LocusObs, Sample};
 pub use error::Error;
-pub use estimate::{Completion, Diplotype, EmOptions, Estimate, Init, StartRecord, estimate};
+pub use estimate::{
+    Completion, Diplotype, EmOptions, Estimate, GenotypeReport, Init, StartRecord, estimate,
+    resolved_genotypes,
+};
 pub use family::{
     ChildInheritance, Family, FamilyComparison, FamilyPhase, FounderComparison, MendelIssue,
     Pedigree, PhaseStatus, Role, check_mendelian, compare_to_families, estimate_families,
     phase_families, read_family_table, read_family_table_from,
 };
 pub use fill::{FillCount, FillOptions, HalfTyped, fill_dataset};
+pub use impute::{Imputation, ImputeOptions, ImputedPair, Population, impute};
 pub use intern::{AlleleId, AlleleTable};
 pub use mac::MacDictionary;
 pub use nomenclature::Nomenclature;

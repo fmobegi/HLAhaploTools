@@ -195,8 +195,86 @@ def _write(path: Path, rows: list[tuple[str, list[str]]]) -> None:
             f.write(key + "\t" + "\t".join(values) + "\n")
 
 
+# ---------------------------------------------------------------- serology and V2 names
+
+# Serological locus (rel_ser_ser.txt) -> the allele loci whose alleles carry its antigens.
+SEROLOGY_LOCI = {"A": ["A"], "B": ["B"], "C": ["C"], "Cw": ["C"], "DR": ["DRB1", "DRB3", "DRB4", "DRB5"],
+                 "DQ": ["DQB1"], "DP": ["DPB1"], "DPw": ["DPB1"]}  # fmt: skip
+
+
+def serology(rel_dna_ser: Path, rel_ser_ser: Path) -> list[tuple[str, list[str]]]:
+    """Serological antigen -> full allele names, from the WMDA tables.
+
+    rel_dna_ser.txt gives each allele its antigen (the unambiguous, assumed and expert
+    assignments; 'possible' ones are left out, as they are not assignments). rel_ser_ser.txt
+    gives each broad antigen its splits and each antigen its associated antigens, so a
+    broad antigen such as B15 covers the alleles of B62, B63, ... Keys are written like
+    typings, `B*62`, one per allele locus (DR52 gives `DRB3*52`).
+    """
+    by_antigen: dict[tuple[str, str], list[str]] = defaultdict(list)
+    for line in _data_lines(rel_dna_ser):
+        c = line.split(";")
+        if len(c) < 6:
+            continue
+        locus, allele = c[0].rstrip("*"), c[1]
+        for antigen in {c[2], c[4], c[5]}:
+            if antigen and antigen not in ("0", "?"):
+                by_antigen[(locus, antigen)].append(f"{locus}*{allele}")
+    below: dict[tuple[str, str], set[str]] = defaultdict(set)  # (serological locus, antigen) -> splits/associated
+    for line in _data_lines(rel_ser_ser):
+        c = line.split(";")
+        if len(c) < 4:
+            continue
+        for other in (c[2] + "/" + c[3]).split("/"):
+            if other:
+                below[(c[0], c[1])].add(other)
+    rows: dict[str, list[str]] = {}
+    sero_loci = {s for s, _ in below} | set(SEROLOGY_LOCI)
+    antigens = {(s, a) for s, a in below} | {(s, a) for s in sero_loci for (l, a) in by_antigen
+                                                if l in SEROLOGY_LOCI.get(s, [])}  # fmt: skip
+    for s, antigen in sorted(antigens):
+        seen, todo = set(), [antigen]
+        while todo:
+            x = todo.pop()
+            if x not in seen:
+                seen.add(x)
+                todo.extend(below.get((s, x), ()))
+        for locus in SEROLOGY_LOCI.get(s, []):
+            alleles = sorted({a for x in seen for a in by_antigen.get((locus, x), [])})
+            if alleles:
+                key = f"{locus}*{antigen.zfill(2)}"
+                rows.setdefault(key, alleles)
+    return sorted(rows.items())
+
+
+def v2_names(nomenclature_2009: Path) -> list[tuple[str, list[str]]]:
+    """Pre-2010 allele names -> current names, for every field level.
+
+    Nomenclature_2009.txt lists full names (A*01010101 -> A*01:01:01:01); the shorter
+    typings are derived from where the colons fall (A*0101 -> A*01:01, A*010101 ->
+    A*01:01:01). A short V2 name that would map to two current names is left out.
+    """
+    out: dict[str, set[str]] = defaultdict(set)
+    with nomenclature_2009.open(encoding="utf-8-sig") as f:
+        for line in f:
+            parts = line.split()
+            if len(parts) != 2 or "*" not in parts[0] or ":" not in parts[1]:
+                continue
+            old, new = parts
+            locus, fields = new.split("*", 1)
+            suffix = fields[-1] if fields[-1].isalpha() else ""
+            fields = fields.rstrip("NLSQCAE")
+            parts_new = fields.split(":")
+            for n in range(2, len(parts_new) + 1):
+                digits = "".join(parts_new[:n])
+                end = suffix if n == len(parts_new) else ""
+                out[f"{locus}*{digits}{end}"].add(f"{locus}*{':'.join(parts_new[:n])}{end}")
+            out[old].add(new)
+    return sorted((k, sorted(v)) for k, v in out.items() if len(v) == 1)
+
+
 def derive_all(release_dir: Path, out_dir: Path, extra_loci: bool = True) -> dict[str, int]:
-    """Write the four tables into out_dir; return the row count of each.
+    """Write the tables into out_dir; return the row count of each.
 
     ``extra_loci=False`` reproduces Hapl-o-Mat's prepareData output exactly.
     """
@@ -218,6 +296,11 @@ def derive_all(release_dir: Path, out_dir: Path, extra_loci: bool = True) -> dic
         "P.txt": p_rows,
         "Smallg.txt": g_small,
     }
+    # Optional tables (serological antigens, pre-2010 names), when their sources are present.
+    if (release_dir / "rel_dna_ser.txt").exists() and (release_dir / "rel_ser_ser.txt").exists():
+        tables["Serology.txt"] = serology(release_dir / "rel_dna_ser.txt", release_dir / "rel_ser_ser.txt")
+    if (release_dir / "Nomenclature_2009.txt").exists():
+        tables["V2.txt"] = v2_names(release_dir / "Nomenclature_2009.txt")
     for name, rows in tables.items():
         _write(out_dir / name, rows)
     return {name: len(rows) for name, rows in tables.items()}
