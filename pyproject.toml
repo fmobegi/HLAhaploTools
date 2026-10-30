@@ -14,6 +14,7 @@ Repository = "https://github.com/fmobegi/HLAhaploTools"
 
 [project.scripts]
 hlahaplotools = "hlahaplotools:main"
+hlahaplo = "hlahaplotools:main"  # short form of the same command
 
 [tool.maturin]
 module-name = "hlahaplotools._core"

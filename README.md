@@ -49,6 +49,8 @@ uv run hlahaplotools --version
 
 The release build uses link-time optimisation, so the first build takes a few minutes.
 
+`hlahaplo` is a short form of the command: `hlahaplo estimate ...` is the same as `hlahaplotools estimate ...`.
+
 ## Reference data
 
 Typings are resolved against the IPD-IMGT/HLA nomenclature and the NMDP multiple-allele-code (MAC) table. Download them once:

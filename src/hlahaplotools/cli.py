@@ -902,9 +902,15 @@ def cmd_families(args) -> int:
     return 0 if est.converged else 2
 
 
+def _prog() -> str:
+    """The command name as typed: hlahaplo is the short form of hlahaplotools."""
+    name = Path(sys.argv[0]).stem if sys.argv and sys.argv[0] else ""
+    return "hlahaplo" if name == "hlahaplo" else "hlahaplotools"
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="hlahaplotools",
+        prog=_prog(),
         description="HLA haplotype frequency estimation (Hapl-o-Mat compatible, with missing-data handling).",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
