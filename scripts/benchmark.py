@@ -83,7 +83,7 @@ def write_mac(path: Path, loci: list[str], rows) -> None:
     with path.open("w") as f:
         f.write("id\t" + "\t".join(f"{l}\t{l}" for l in loci) + "\n")
         for sid, per in rows:
-            f.write(sid + "\t" + "\t".join(f"{a.split('*')[1]}\t{b.split('*')[1]}" for a, b in per) + "\n")
+            f.write(sid + "\t" + "\t".join(f"{a.split('*')[-1]}\t{b.split('*')[-1]}" for a, b in per) + "\n")
 
 
 def write_pop(path: Path, loci: list[str], rows) -> None:
@@ -95,11 +95,14 @@ def write_pop(path: Path, loci: list[str], rows) -> None:
             f.write(sid + "\t" + "\t".join(f"{a.split('*')[1]}\t{b.split('*')[1]}" for a, b in per) + "\n")
 
 
-def prepare_real(src: Path, loci: list[str], resolution: str, nom, n: int | None, seed: int):
+def prepare_real(
+    src: Path, loci: list[str], resolution: str, nom, n: int | None, seed: int, may_be_untyped=()
+):
     """People fully typed at `loci`, each typing reduced to one name at `resolution`.
 
     A typing that maps to more than one name (a G group, a MAC code) leaves the
-    person out, so every tool sees the same unambiguous data.
+    person out, so every tool sees the same unambiguous data. Loci in
+    `may_be_untyped` may instead be left untyped (both alleles blank).
     """
     all_loci, rows = read_mac(src)
     idx = [all_loci.index(l) for l in loci]
@@ -120,6 +123,9 @@ def prepare_real(src: Path, loci: list[str], resolution: str, nom, n: int | None
         for k in idx:
             a, b = per[k]
             if not a and not b:
+                if all_loci[k] in may_be_untyped:
+                    out.append(("", ""))
+                    continue
                 dropped["untyped"] += 1
                 break
             b = b or a  # blank second allele: homozygous (all tools get the copy)
