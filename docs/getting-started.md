@@ -1,6 +1,6 @@
 # Getting started
 
-The user guide of HLAhaploTools: how to run it, what it reads and writes, and how it works. Install it and download the reference data first ([README](../README.md#installation)). For scripting, see the [Python API](python-api.md).
+The user guide of HLAhaploTools: how to run it, what it reads and writes, and how it works. Install it and download the reference data first ([README](../README.md#installation)). From a clone, put `uv run` before each command. For scripting, see the [Python API](python-api.md).
 
 ## Contents
 
@@ -17,7 +17,7 @@ The user guide of HLAhaploTools: how to run it, what it reads and writes, and ho
 ### Population data
 
 ```bash
-uv run hlahaplotools estimate INPUT --loci A:g,C:g,B:g,DRB1:g,DQB1:g -o results/population
+hlahaplotools estimate INPUT --loci A:g,C:g,B:g,DRB1:g,DQB1:g -o results/population
 ```
 
 `INPUT` is a typing file in any of the [input formats](#input-formats). The screen reports how many people were read, what was filled in at each locus, how many people are untyped or half-typed at each locus, whether the EM starts agreed, and where the results were written:
@@ -38,7 +38,7 @@ A*01:01~C*07:01~B*08:01~DRB1*03:01~DQB1*02:01 0.0712
 ### Family data
 
 ```bash
-uv run hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families
+hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families
 ```
 
 `FAMILY_TABLE` has one row per person, with family and member columns (see [Family table](#family-table-csv-tsv)). The results:
@@ -110,13 +110,14 @@ A typing that covers several alleles at the target resolution (e.g. `A*02` at `2
 ## Command line
 
 ```bash
-uv run hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]          # population data
-uv run hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]          # family data
-uv run hlahaplotools stats     INPUT --loci A:2f,B:2f,... [-o results/stats]  # Hardy–Weinberg and LD
-uv run hlahaplotools impute    INPUT --frequencies hfs.dat [-o results/impute] # each person's haplotype pairs
-uv run hlahaplotools haplomat  MAC|GLSC|GLS|READ PARAMETER_FILE               # run from a Hapl-o-Mat parameter file
-uv run hlahaplotools summary   INPUT                                          # describe an input file
-uv run hlahaplotools rename    INPUT OUTPUT                                   # update retired allele names
+hlahaplotools estimate  INPUT --loci A:g,B:g,... [-o results]          # population data
+hlahaplotools families  INPUT --loci A:g,B:g,... [-o results]          # family data
+hlahaplotools stats     INPUT --loci A:2f,B:2f,... [-o results/stats]  # Hardy–Weinberg and LD
+hlahaplotools impute    INPUT --frequencies hfs.dat [-o results/impute] # each person's haplotype pairs
+hlahaplotools haplomat  MAC|GLSC|GLS|READ PARAMETER_FILE               # run from a Hapl-o-Mat parameter file
+hlahaplotools summary   INPUT                                          # describe an input file
+hlahaplotools rename    INPUT OUTPUT                                   # update retired allele names
+hlahaplotools download-data [--skip-mac]                               # reference data, once
 ```
 
 `hlahaplotools COMMAND --help` lists every option of a command. Options of `estimate` and `families` (most are shared by `stats` and `impute`):

@@ -40,45 +40,51 @@ HLAhaploTools **is not**:
 
 ## Installation
 
-Requirements: Linux, macOS or Windows; Python 3.14 or newer; [uv](https://docs.astral.sh/uv/); and a Rust toolchain 1.85 or newer ([rustup](https://rustup.rs/); on Windows, the MSVC toolchain with Microsoft's [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)).
+HLAhaploTools runs on Linux, macOS and Windows, with Python 3.14 or newer. Install it with [uv](https://docs.astral.sh/uv/) or pip; prebuilt packages need no compiler:
+
+```bash
+uv tool install hlahaplotools        # or: pip install hlahaplotools
+hlahaplotools --version
+```
+
+`hlahaplo` is a short form of the command: `hlahaplo estimate ...` is the same as `hlahaplotools estimate ...`.
+
+To work on the code, or on a system without a prebuilt package, build from source with a Rust toolchain 1.85 or newer ([rustup](https://rustup.rs/); on Windows, the MSVC toolchain with Microsoft's [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)):
 
 ```bash
 git clone https://github.com/fmobegi/HLAhaploTools.git
 cd HLAhaploTools
-uv sync                       # builds the Rust extension and installs the package
-uv run hlahaplotools --version
+uv sync                              # builds the Rust extension; run commands with `uv run hlahaplotools ...`
 ```
 
 The release build uses link-time optimisation, so the first build takes a few minutes.
-
-`hlahaplo` is a short form of the command: `hlahaplo estimate ...` is the same as `hlahaplotools estimate ...`.
 
 ### Reference data
 
 Typings are resolved against the IPD-IMGT/HLA nomenclature and the NMDP multiple-allele-code (MAC) table. Download them once:
 
 ```bash
-uv run python scripts/build_nomenclature.py     # about 650 MB, mostly the MAC table
+hlahaplotools download-data          # about 650 MB, mostly the MAC table; --skip-mac for IMGT/HLA only
 ```
 
-This writes `data/`:
+This writes `data/` in the current folder (or `$HLAHAPLOTOOLS_DATA`, or `--data-dir`):
 
-| Path                   | Contents                                                                                                 |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- |
-| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt`       |
+| Path | Contents |
+| --- | --- |
+| `imgthla/<release>/` | `hla_nom_g.txt`, `hla_nom_p.txt`, `hla_nom.txt`, `Allelelist.txt`, `Deleted_alleles.txt` |
 | `derived/<release>/` | Lookup tables used for resolution: `AllAllelesExpanded.txt`, `LargeG.txt`, `P.txt`, `Smallg.txt` |
-| `mac/alpha.v3.txt`   | NMDP multiple-allele codes                                                                               |
-| `manifest.json`      | Release, source URLs, SHA-256 checksums, MAC table date                                                  |
+| `mac/alpha.v3.txt` | NMDP multiple-allele codes |
+| `manifest.json` | Release, source URLs, SHA-256 checksums, MAC table date |
 
-The IMGT/HLA release is pinned (`PINNED_RELEASE` in [scripts/build_nomenclature.py](scripts/build_nomenclature.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
+The IMGT/HLA release is pinned (`PINNED_RELEASE` in [reference_data.py](src/hlahaplotools/reference_data.py), currently 3.66.0). To use another release, run with `--release 3.65.0`. The MAC table has no release number: it is downloaded once and kept, and its `LAST UPDATED` date is recorded; `--refresh-mac` downloads a new copy. Report both with any results.
 
-Commands find `data/` in the current folder, in `$HLAHAPLOTOOLS_DATA`, or with `--data-dir`.
+The other commands find `data/` in the current folder, in `$HLAHAPLOTOOLS_DATA`, or with `--data-dir`. To use one copy from anywhere, set `HLAHAPLOTOOLS_DATA` to its folder.
 
 ## Usage
 
 ```bash
-uv run hlahaplotools estimate INPUT --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/population   # unrelated people
-uv run hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families  # families
+hlahaplotools estimate INPUT --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/population   # unrelated people
+hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families  # families
 ```
 
 Each command writes one folder:
@@ -143,15 +149,15 @@ uv run ruff check . && uv run ruff format --check .
 cargo clippy --all-targets && cargo fmt --check
 ```
 
-Tests that need the reference data are skipped until `scripts/build_nomenclature.py` has been run. A change to estimation, resolution or file reading should come with a test, and should keep agreement with Hapl-o-Mat (`scripts/compare_haplomat.py`) unless the difference is intended and documented.
+Tests that need the reference data are skipped until `uv run hlahaplotools download-data` has been run in the clone. A change to estimation, resolution or file reading should come with a test, and should keep agreement with Hapl-o-Mat (`scripts/compare_haplomat.py`) unless the difference is intended and documented.
 
 | Path                              | Contents                                                                                                 |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | `crates/hlahaplotools-core/`    | Rust core: parsers, MAC codes, nomenclature tables, resolution, EM, families, pedigree checks, output    |
 | `src/lib.rs`                    | Python bindings (`hlahaplotools._core`)                                                                |
 | `src/hlahaplotools/`            | Python package and command line                                                                          |
-| `scripts/build_nomenclature.py` | Downloads the pinned reference data and builds the lookup tables                                         |
-| `scripts/derive_tables.py`      | Builds the lookup tables from an IMGT/HLA release                                                        |
+| `src/hlahaplotools/reference_data.py` | `download-data`: downloads the pinned reference data and builds the lookup tables |
+| `src/hlahaplotools/derive_tables.py` | Builds the lookup tables from an IMGT/HLA release |
 | `scripts/`                      | Benchmarks, validations and simulation (see [Reproducing the analyses](docs/reproducing-the-analyses.md)) |
 | `examples/`                     | Example data: a simulated population, and family typings from the study described in the manuscript      |
 | `tests/`                        | Test suite                                                                                               |
