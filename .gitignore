@@ -24,3 +24,11 @@ wheels/
 .pytest_cache/
 /bench/
 /benchmark.md
+
+# Local environment, credentials and crash logs
+.Renviron
+Renviron
+.Rprofile
+Rprofile
+.env
+hs_err_pid*.log
