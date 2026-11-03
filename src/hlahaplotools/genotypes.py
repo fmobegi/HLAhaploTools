@@ -24,7 +24,7 @@ MAX_COPIES = 1000  # most genotypes one locus may list once weights are written 
 def write_genotypes(path, dataset, nomenclature, resolutions, min_genotype_frequency=1e-5):
     """Write the genotype list; returns the issues (people left out)."""
     rows, issues = resolved_genotypes(dataset, nomenclature, resolutions, min_genotype_frequency=min_genotype_frequency)
-    with open(path, "w", newline="\n") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         for sid, reports in rows:
             for kind, code, w in reports:
                 f.write(f"{sid}\t{kind}\t{w:.14g}\t{code}\n")
@@ -50,7 +50,7 @@ def read_genotypes(path, loci=None):
     people: dict[str, list[tuple[int, float, list[str]]]] = {}
     issues = []
     order = None
-    for n, line in enumerate(Path(path).read_text().splitlines(), 1):
+    for n, line in enumerate(Path(path).read_text(encoding="utf-8-sig").splitlines(), 1):
         parts = line.split()
         if not parts:
             continue
@@ -108,7 +108,7 @@ def read_genotypes(path, loci=None):
         lines.append(f"{sid}\t" + "\t".join(cells))
     with tempfile.TemporaryDirectory() as tmp:
         glc = Path(tmp) / "genotypes.glc"
-        glc.write_text("\n".join(lines) + "\n")
+        glc.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         # Already resolved: a blank copy stays unknown, and DRB3/4/5 are as written.
         ds = read_glsc(str(glc), loci=loci, half_typed="unknown", drb345=False)
     return ds, issues + [(l, i, r) for l, i, r in ds.issues]

@@ -47,7 +47,7 @@ def find_data(data_dir: str | None) -> tuple[Path | None, dict]:
     for candidate in (data_dir, os.environ.get("HLAHAPLOTOOLS_DATA"), "data"):
         if candidate and (Path(candidate) / "manifest.json").exists():
             folder = Path(candidate)
-            return folder, json.loads((folder / "manifest.json").read_text())
+            return folder, json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
     return None, {}
 
 
@@ -314,7 +314,7 @@ def run_estimate(
         "samples_left_out": [{"id": i, "reason": r} for _, i, r in est.issues],
     }
     run_path = out_freqs.with_name("run.json")
-    run_path.write_text(json.dumps(run_info, indent=2) + "\n")
+    run_path.write_text(json.dumps(run_info, indent=2) + "\n", encoding="utf-8", newline="\n")
     say(f"Wrote {len(kept)} haplotypes to {out_freqs} (details in {run_path})")
     return 0 if est.converged else 2
 
@@ -358,7 +358,7 @@ def cmd_rename(args) -> int:
     out = Path(args.output)
     seen = rename_file(Path(args.input), out, fmt, renames)
     table = out.with_name(out.name + ".renames.tsv")
-    with table.open("w") as f:
+    with table.open("w", encoding="utf-8", newline="\n") as f:
         f.write("old\tnew\ttypings\n")
         for (old, new), n in sorted(seen.items(), key=lambda x: -x[1]):
             f.write(f"{old}\t{new}\t{n}\n")
@@ -404,7 +404,7 @@ def cmd_estimate(args) -> int:
 
 def read_parameters(path: str) -> dict[str, str]:
     params = {}
-    for line in Path(path).read_text().splitlines():
+    for line in Path(path).read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
         if line and not line.startswith("#") and "=" in line:
             key, _, value = line.partition("=")
@@ -419,7 +419,7 @@ def cmd_haplomat(args) -> int:
     if fmt == "read":
         # A genotype list written with WRITE_GENOTYPES: codes are already resolved.
         input_path, glid, fmt = p["FILENAME_INPUT"], None, "genotypes"
-        first = next((l for l in Path(input_path).read_text().splitlines() if l.strip()), "")
+        first = next((l for l in Path(input_path).read_text(encoding="utf-8-sig").splitlines() if l.strip()), "")
         if not first:
             sys.exit(f"error: {input_path} is empty")
         p.setdefault(
@@ -592,7 +592,7 @@ def cmd_stats(args) -> int:
         "unreadable_lines": [{"line": l, "id": i, "reason": r} for l, i, r in ds.issues],
         "seconds": {"hardy_weinberg": round(t1 - t0, 3), "linkage_disequilibrium": round(t2 - t1, 3)},
     }
-    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n")
+    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8", newline="\n")
     say(f"Wrote hwe.tsv, ld.tsv, ld_alleles.tsv and run.json to {out}")
     return 0
 
@@ -600,7 +600,7 @@ def cmd_stats(args) -> int:
 def read_frequency_table(path: Path) -> list[tuple[str, float]]:
     """hfs.dat: haplotype<TAB>frequency per line."""
     out = []
-    for n, line in enumerate(path.read_text().splitlines(), 1):
+    for n, line in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), 1):
         if not line.strip():
             continue
         parts = line.split()
@@ -653,7 +653,7 @@ def cmd_impute(args) -> int:
         run = pops[0][1].with_name("run.json")
         if not run.exists():
             sys.exit(f"error: no --loci given and no {run} to take them from")
-        loci_res = list(json.loads(run.read_text())["loci_and_resolutions"].items())
+        loci_res = list(json.loads(run.read_text(encoding="utf-8"))["loci_and_resolutions"].items())
     loci = [l for l, _ in loci_res]
     nom_dir, mac, manifest = resolve_data_paths(args)
     t0 = time.perf_counter()
@@ -705,7 +705,7 @@ def cmd_impute(args) -> int:
         "samples_left_out": [{"id": i, "reason": r} for _, i, r in issues],
         "seconds": round(time.perf_counter() - t0, 3),
     }
-    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n")
+    (out / "run.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8", newline="\n")
     if rows:
         top1.sort()
         say(f"Imputed {len(rows):,} of {len(ds):,} people; median probability of the best pair "
@@ -721,7 +721,7 @@ def cmd_impute(args) -> int:
 
 
 def _tsv(path: Path, header: list[str], rows) -> None:
-    with path.open("w") as f:
+    with path.open("w", encoding="utf-8", newline="\n") as f:
         f.write("\t".join(header) + "\n")
         for row in rows:
             f.write("\t".join("" if v is None else str(v) for v in row) + "\n")
@@ -861,7 +861,7 @@ def cmd_families(args) -> int:
     # Check the EM itself: founders as unrelated people vs. what the families show.
     unphased, _ = estimate_families(data, nom, res, use_family_phase=False, **em)
     cmp = compare_to_families(unphased, phases)
-    (out / "comparison.json").write_text(json.dumps(cmp, indent=2) + "\n")
+    (out / "comparison.json").write_text(json.dumps(cmp, indent=2) + "\n", encoding="utf-8", newline="\n")
     if cmp["n_compared"]:
         say(
             f"EM vs families: {cmp['n_exact']}/{cmp['n_compared']} founders' haplotype pairs identical, "
@@ -897,7 +897,7 @@ def cmd_families(args) -> int:
         "left_out": [{"line": l, "id": i, "reason": r} for l, i, r in data.issues]
         + [{"id": i, "reason": r} for _, i, r in est.issues],
     }
-    (out / "run.json").write_text(json.dumps(run_info, indent=2) + "\n")
+    (out / "run.json").write_text(json.dumps(run_info, indent=2) + "\n", encoding="utf-8", newline="\n")
     say(f"Wrote results to {out}/")
     return 0 if est.converged else 2
 

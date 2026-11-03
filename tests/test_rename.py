@@ -56,6 +56,16 @@ def test_rename_keeps_each_format(tmp_path):
     )
 
 
+def test_rename_keeps_line_endings(tmp_path):
+    r = load_renames(imgt(tmp_path))
+    for name, nl in (("lf", b"\n"), ("crlf", b"\r\n")):
+        src = tmp_path / f"{name}.dat"
+        src.write_bytes(nl.join([b"id\tC\tC", b"s1\t04:09N\t07:01", b""]))
+        dest = tmp_path / f"{name}_out.dat"
+        rename_file(src, dest, "mac", r)
+        assert dest.read_bytes() == nl.join([b"id\tC\tC", b"s1\t04:09L\t07:01", b""]), name
+
+
 def test_rename_command(tmp_path):
     mac = tmp_path / "x.dat"
     mac.write_text("id\tC\tC\ns1\t04:09N\t07:01\n")

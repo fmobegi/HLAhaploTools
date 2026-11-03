@@ -84,7 +84,7 @@ def rename_file(src: Path, dest: Path, fmt: str, renames: dict[str, str]) -> Cou
     Everything else in the file (IDs, separators, empty cells) is kept as it is.
     """
     seen: Counter = Counter()
-    text = src.read_text(encoding="utf-8-sig")
+    text = src.read_text(encoding="utf-8-sig", newline="")  # keep \r\n, so the file's line endings are kept
     newline = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines()
     out: list[str] = []
@@ -95,7 +95,7 @@ def rename_file(src: Path, dest: Path, fmt: str, renames: dict[str, str]) -> Cou
             out.append(parts[0] + "".join(p if p.isspace() else _update(p, None, renames, seen) for p in parts[1:]))
     else:
         if not lines:
-            dest.write_text("")
+            dest.write_text("", encoding="utf-8")
             return seen
         sep = "\t" if fmt == "mac" or "\t" in lines[0] else (";" if lines[0].count(";") > lines[0].count(",") else ",")
         header = lines[0].split(sep)
@@ -118,5 +118,5 @@ def rename_file(src: Path, dest: Path, fmt: str, renames: dict[str, str]) -> Cou
                     cells[i] = f'"{new}"' if quoted else new
             out.append(sep.join(cells))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(newline.join(out) + (newline if text.endswith(("\n", "\r")) else ""), encoding="utf-8")
+    dest.write_text(newline.join(out) + (newline if text.endswith(("\n", "\r")) else ""), encoding="utf-8", newline="")
     return seen

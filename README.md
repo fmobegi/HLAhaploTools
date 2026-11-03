@@ -174,11 +174,6 @@ HLAhaploTools began in this repository as an R package for family segregation an
 
 Maintenance and future developments will be led by Fredrick M. Mobegi. Feel free to raise an [issue](https://github.com/fmobegi/HLAhaploTools/issues) or message the author if you need any support getting this tool running, or with suggestions for improvement.
 
-<p float="center">
-  <img src="docs/images/pathwest_logo.png" alt="PathWest Laboratory Medicine WA" width="400" height="90">
-  <img src="docs/images/uwa_logo.png" alt="The University of Western Australia" width="400" height="90">
-</p>
-
 ## Citation
 
 A manuscript describing HLAhaploTools is in preparation. Until it is published, please cite this [repository](https://github.com/fmobegi/HLAhaploTools) with the version used, and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`. Please also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and the data preprocessing methods that HLAhaploTools reimplements.
