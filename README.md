@@ -128,7 +128,7 @@ results/
 
 ## Contributing
 
-Bug reports, questions and pull requests are welcome through [GitHub issues](https://github.com/fmobegi/HLAhaploTools/issues). For a bug, include the command, the screen output, `run.json`, and a small input that shows the problem. **Do not attach or commit typing data from your own cohorts**: reduce the problem to simulated data (`scripts/simulate.py`) or to the files in `examples/`.
+Questions, ideas and how-to help go to [Discussions](https://github.com/fmobegi/HLAhaploTools/discussions); bugs and pull requests to [issues](https://github.com/fmobegi/HLAhaploTools/issues). For a bug, include the command, the screen output, `run.json`, and a small input that shows the problem. **Do not attach or commit typing data from your own cohorts**: reduce the problem to simulated data (`scripts/simulate.py`) or to the files in `examples/`.
 
 Development setup and checks:
 
@@ -172,7 +172,7 @@ Nomenclature data come from the [IPD-IMGT/HLA Database](https://www.ebi.ac.uk/ip
 
 HLAhaploTools began in this repository as an R package for family segregation analysis; its last version is tagged [`r-package-v0.99.0`](https://github.com/fmobegi/HLAhaploTools/tree/r-package-v0.99.0). A copy of that prototype, with a related Shiny interface, is kept separately as a student's project at [h-sham/HLAhaploTools](https://github.com/h-sham/HLAhaploTools) and [h-sham/HLAhaploTools_Shiny](https://github.com/h-sham/HLAhaploTools_Shiny). These projects, while sharing the name, are not maintained with this repository, and do not share code with the current version.
 
-Maintenance and future developments will be led by Fredrick M. Mobegi. Feel free to raise an [issue](https://github.com/fmobegi/HLAhaploTools/issues) or message the author if you need any support getting this tool running, or with suggestions for improvement.
+Maintenance and future developments will be led by Fredrick M. Mobegi. Feel free to ask in [Discussions](https://github.com/fmobegi/HLAhaploTools/discussions), raise an [issue](https://github.com/fmobegi/HLAhaploTools/issues) or message the author if you need any support getting this tool running, or with suggestions for improvement.
 
 ## Citation
 

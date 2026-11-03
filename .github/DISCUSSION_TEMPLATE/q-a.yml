@@ -1,0 +1,31 @@
+title: "[Question] "
+labels: ["question"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for asking. For a bug (a crash, or a result you believe is wrong), please open an issue instead.
+        **Do not paste or attach real typing data**: use simulated data (`scripts/simulate.py`) or the files in `examples/`.
+  - type: textarea
+    id: question
+    attributes:
+      label: What would you like to do or understand?
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command or code
+      description: The command line or Python code you ran, if any.
+      render: bash
+  - type: textarea
+    id: output
+    attributes:
+      label: What happened
+      description: Screen output, or the relevant part of `run.json`.
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `hlahaplotools --version`, and your operating system.

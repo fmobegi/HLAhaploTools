@@ -1,0 +1,20 @@
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What do you need?
+      description: The analysis, input format or output you would like HLAhaploTools to support, and why.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: A small example of the input or the result you have in mind. No real typing data, please.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround
+      description: How you do this today, with HLAhaploTools or another tool.
