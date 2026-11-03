@@ -911,7 +911,8 @@ def _prog() -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog=_prog(),
-        description="HLA haplotype frequency estimation (Hapl-o-Mat compatible, with missing-data handling).",
+        description="Extended HLA and MHC haplotypes in families and populations: pedigree phasing, and EM "
+        "frequency estimation that keeps untyped and half-typed loci (Hapl-o-Mat compatible).",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {_version()}")
     sub = parser.add_subparsers(dest="command", required=True)

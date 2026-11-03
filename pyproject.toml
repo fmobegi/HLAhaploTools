@@ -1,7 +1,16 @@
 [project]
 name = "hlahaplotools"
 version = "0.1.0"
-description = "HLA haplotype frequency estimation: a fast Rust port of Hapl-o-Mat with handling of untyped and half-typed loci"
+description = "Extended HLA and MHC haplotypes in families and populations: pedigree phasing, and EM frequency estimation that keeps untyped and half-typed loci"
+keywords = ["HLA", "MHC", "haplotype", "pedigree", "expectation-maximisation", "immunogenetics", "MICA", "Hapl-o-Mat"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Operating System :: OS Independent",
+]
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = []
