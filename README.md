@@ -43,10 +43,10 @@ HLAhaploTools **is not**:
 HLAhaploTools runs on Linux, macOS and Windows, with Python 3.14 or newer. Install it with [uv](https://docs.astral.sh/uv/) or pip; prebuilt packages need no compiler:
 
 > [!NOTE]
-> **Coming soon.** HLAhaploTools is not on PyPI yet; until the first release is published there, install it from source (below).
+> **Release candidate.** The current release is a pre-release (0.1.0rc2), which installers skip unless asked: use `--pre` with pip, or `--prerelease allow` with uv. Once 0.1.0 is out, the plain commands are enough.
 
 ```bash
-uv tool install hlahaplotools        # or: pip install hlahaplotools
+uv tool install --prerelease allow hlahaplotools    # or: pip install --pre hlahaplotools
 hlahaplotools --version
 ```
 
@@ -200,9 +200,9 @@ Maintenance and future developments will be led by Fredrick M. Mobegi. Feel free
 
 A manuscript describing HLAhaploTools is in preparation. Until it is published, please cite the version you used, archived on Zenodo:
 
-> Mobegi FM. HLAhaploTools (version 0.1.0-rc1). Zenodo; 2026. [doi:10.5281/zenodo.23906130](https://doi.org/10.5281/zenodo.23906130)
+> Mobegi FM. HLAhaploTools (version 0.1.0-rc2). Zenodo; 2026. [doi:10.5281/zenodo.23907995](https://doi.org/10.5281/zenodo.23907995)
 
-[doi:10.5281/zenodo.23906129](https://doi.org/10.5281/zenodo.23906129) always resolves to the latest version. GitHub's "Cite this repository" button gives the same citation in other formats. Report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`. Please also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and the data preprocessing methods that HLAhaploTools reimplements.
+Report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`. Please also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and the data preprocessing methods that HLAhaploTools reimplements.
 
 ## License
 
