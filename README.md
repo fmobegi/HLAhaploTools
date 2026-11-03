@@ -42,6 +42,9 @@ HLAhaploTools **is not**:
 
 HLAhaploTools runs on Linux, macOS and Windows, with Python 3.14 or newer. Install it with [uv](https://docs.astral.sh/uv/) or pip; prebuilt packages need no compiler:
 
+> [!NOTE]
+> **Coming soon.** HLAhaploTools is not on PyPI yet; until the first release is published there, install it from source (below).
+
 ```bash
 uv tool install hlahaplotools        # or: pip install hlahaplotools
 hlahaplotools --version
