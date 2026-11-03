@@ -1,6 +1,6 @@
 # Reproducing the analyses
 
-The analyses of the accompanying manuscript are scripts in [scripts/](../scripts); the results are reported in the manuscript, not here. Every benchmark runs from one command, into one folder, on a laptop or a cluster node:
+The analyses of the accompanying manuscript are scripts in [scripts/](../scripts); the results are reported in the manuscript, not here. Every benchmark runs from one command, into one folder, on a laptop or a cluster node. The benchmarks need Linux (on Windows, use WSL): they cap and measure memory with Linux tools, and Hapl-o-Mat is built with `make`.
 
 ```bash
 uv run python scripts/benchmark.py all --out runs/run1 --real COHORT.dat --threads 1,8 --rscript Rscript

@@ -37,7 +37,7 @@ HLAhaploTools **is not**:
 
 ## Installation
 
-Requirements: Linux, macOS, or Windows with WSL; Python 3.14 or newer; [uv](https://docs.astral.sh/uv/); and a Rust toolchain 1.85 or newer ([rustup](https://rustup.rs/)).
+Requirements: Linux, macOS or Windows; Python 3.14 or newer; [uv](https://docs.astral.sh/uv/); and a Rust toolchain 1.85 or newer ([rustup](https://rustup.rs/); on Windows, the MSVC toolchain with Microsoft's [C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/)).
 
 ```bash
 git clone https://github.com/fmobegi/HLAhaploTools.git
