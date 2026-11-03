@@ -132,3 +132,28 @@ def test_unknown_xml_layout_needs_format(tmp_path):
     p.write_text("<?xml version='1.0'?><Report><x/></Report>")
     run = subprocess.run([sys.executable, "-m", "hlahaplotools", "summary", str(p)], capture_output=True, text=True)
     assert run.returncode != 0 and "pass --format" in run.stderr
+
+
+def test_missing_input_gives_a_clear_error(tmp_path):
+    commands = (
+        ["estimate", "--loci", "A:2f"],
+        ["stats", "--loci", "A:2f"],
+        ["families", "--loci", "A:2f"],
+        ["summary"],
+    )
+    for cmd in commands:
+        run = subprocess.run(
+            [sys.executable, "-m", "hlahaplotools", *cmd, str(tmp_path / "nope.glc")], capture_output=True, text=True
+        )
+        assert run.returncode != 0, cmd
+        assert "input not found" in run.stderr and "Traceback" not in run.stderr, (cmd, run.stderr)
+
+
+def test_bad_locus_gives_one_line_error(tmp_path):
+    p = tmp_path / "x.dat"
+    p.write_text("id\tA\tA\tB\tB\ns1\t01:01\t02:01\t08:01\t07:02\n")
+    run = subprocess.run(
+        [sys.executable, "-m", "hlahaplotools", "summary", str(p), "--loci", "A,DPB1"], capture_output=True, text=True
+    )
+    assert run.returncode != 0
+    assert run.stderr.startswith("error:") and "DPB1" in run.stderr and "Traceback" not in run.stderr, run.stderr

@@ -1141,4 +1141,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_parser().parse_args(argv)
-    sys.exit(args.func(args))
+    for name in ("input", "parameters"):  # the typing file, or haplomat's parameter file
+        path = getattr(args, name, None)
+        if path is not None and not Path(path).exists():
+            sys.exit(f"error: {name} not found: {path} (looked in {Path.cwd()})")
+    try:
+        code = args.func(args)
+    except (ValueError, OSError) as e:
+        # Problems with the input or its options (a locus not in the file, an unreadable typing,
+        # a missing file): one line, not a traceback. HLAHAPLOTOOLS_DEBUG=1 shows the traceback.
+        if os.environ.get("HLAHAPLOTOOLS_DEBUG"):
+            raise
+        sys.exit(f"error: {e}")
+    sys.exit(code)
