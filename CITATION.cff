@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use HLAhaploTools, please cite it as below, and report the IPD-IMGT/HLA release and MAC table date recorded in run.json."
+title: "HLAhaploTools"
+abstract: >-
+  Assigns and estimates extended HLA and MHC haplotypes: phasing in families from
+  inheritance, and expectation-maximisation estimation of haplotype frequencies in
+  unrelated individuals, keeping people who are untyped or half-typed at some loci.
+type: software
+authors:
+  - family-names: "Mobegi"
+    given-names: "Fredrick M."
+    orcid: "https://orcid.org/0000-0003-0554-9919"
+    affiliation: "PathWest Laboratory Medicine WA; The University of Western Australia"
+version: "0.1.0-rc1"
+date-released: "2026-11-03"
+license: GPL-3.0-or-later
+repository-code: "https://github.com/fmobegi/HLAhaploTools"
+keywords:
+  - HLA
+  - MHC
+  - haplotype
+  - expectation-maximisation
+  - immunogenetics
+  - pedigree
+  - bioinformatics
+references:
+  - type: article
+    title: "Hapl-o-Mat: open-source software for HLA haplotype frequency estimation from ambiguous and heterogeneous data"
+    authors:
+      - family-names: "Schäfer"
+        given-names: "Christian"
+      - family-names: "Schmidt"
+        given-names: "Alexander H."
+      - family-names: "Sauter"
+        given-names: "Jürgen"
+    journal: "BMC Bioinformatics"
+    volume: 18
+    issue: 1
+    start: 284
+    year: 2017
+    doi: "10.1186/s12859-017-1692-y"
