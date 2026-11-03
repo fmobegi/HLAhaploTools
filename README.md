@@ -58,6 +58,7 @@ To work on the code, or on a system without a prebuilt package, build from sourc
 git clone https://github.com/fmobegi/HLAhaploTools.git
 cd HLAhaploTools
 uv sync                              # builds the Rust extension; run commands with `uv run hlahaplotools ...`
+source .venv/bin/activate
 ```
 
 The release build uses link-time optimisation, so the first build takes a few minutes.
