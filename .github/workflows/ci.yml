@@ -79,10 +79,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: data
-          key: imgthla-${{ hashFiles('scripts/build_nomenclature.py', 'scripts/derive_tables.py') }}
+          key: imgthla-${{ hashFiles('src/hlahaplotools/reference_data.py', 'src/hlahaplotools/derive_tables.py') }}
       - name: Download reference data
         if: steps.data.outputs.cache-hit != 'true'
-        run: uv run python scripts/build_nomenclature.py --skip-mac
+        run: uv run hlahaplotools download-data --skip-mac
 
       - name: Command line
         run: |

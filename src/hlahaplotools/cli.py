@@ -40,7 +40,7 @@ def _version() -> str:
 
 
 def find_data(data_dir: str | None) -> tuple[Path | None, dict]:
-    """Locate the data folder written by scripts/build_nomenclature.py.
+    """Locate the data folder written by `hlahaplotools download-data`.
 
     Order: --data-dir, $HLAHAPLOTOOLS_DATA, ./data. Returns (folder, manifest).
     """
@@ -62,7 +62,7 @@ def resolve_data_paths(args) -> tuple[Path, Path | None, dict]:
         mac = folder / "mac" / "alpha.v3.txt"
     if nom is None:
         sys.exit(
-            "error: no nomenclature tables found. Run `uv run python scripts/build_nomenclature.py`, "
+            "error: no nomenclature tables found. Run `hlahaplotools download-data` (once), "
             "or pass --nomenclature DIR (a data/derived/<release> folder or Hapl-o-Mat's data/)."
         )
     return nom, mac, manifest
@@ -348,7 +348,7 @@ def cmd_rename(args) -> int:
     else:
         folder, manifest = find_data(args.data_dir)
         if folder is None or "imgthla" not in manifest:
-            sys.exit("error: no IMGT/HLA files found; pass --imgt-dir or run scripts/build_nomenclature.py")
+            sys.exit("error: no IMGT/HLA files found; pass --imgt-dir or run `hlahaplotools download-data`")
         imgt = folder / "imgthla" / manifest["imgthla"]["release"]
     fmt = args.format
     if fmt is None:
@@ -1126,6 +1126,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--mac-codes")
     fill_options(s)
     s.set_defaults(func=cmd_summary)
+
+    from hlahaplotools import reference_data
+
+    dd = sub.add_parser(
+        "download-data",
+        help="download the IPD-IMGT/HLA files and NMDP MAC table, and build the lookup tables (run once)",
+    )
+    reference_data.add_arguments(dd)
+    dd.set_defaults(func=reference_data.run)
     return parser
 
 
