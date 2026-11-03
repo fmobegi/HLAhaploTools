@@ -22,22 +22,12 @@ HLAhaploTools **is not**:
 - a model of recombination: a recombinant child shows up as inconsistent loci (or a `recombination` flag), and those loci stay unphased;
 - a way to make rare haplotypes certain: frequencies of rare haplotypes remain uncertain at the cohort sizes typical of HLA studies, whatever the tool.
 
-## Key strengths
-
-- **Laboratory reports in, ambiguity kept**: MAC, GL strings, GLS, HML and NGSengine, with MAC codes, allele lists and groups weighed by the EM.
-- **Nobody left behind**: people untyped or half-typed at some loci stay in the estimate.
-- **The whole MHC**: any IPD-IMGT/HLA locus, including MICA, MICB and the non-classical genes, at a resolution chosen per locus.
-- **Families and unrelated people**: pedigree phasing and checks, founder-only estimates, and population estimates in one tool.
-- **Reporting conventions built in**: blank second alleles and DRB3/4/5 filled as laboratories report them, and every fill counted.
-- **Fast and reproducible**: a Rust core, ten EM starts by default, results identical on any number of threads, and every run recorded in `run.json`.
-- **Hapl-o-Mat compatible**: its formats and parameter files are read, and from the same start the results agree.
-
 ## Contents
 
 - [What it is and what it is not](#what-it-is-and-what-it-is-not)
-- [Key strengths](#key-strengths)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Key strengths](#key-strengths)
 - [Limitations](#limitations)
 - [Contributing](#contributing)
 - [Credits](#credits)
@@ -115,6 +105,16 @@ results/
 - **[Getting started](docs/getting-started.md)**: the user guide: quick start, input formats, resolutions, every command-line option, output files, good practice, and how it works.
 - **[Python API](docs/python-api.md)**: if HLAhaploTools is one cog in a bigger machine, a Snakemake or Nextflow pipeline, a Jupyter notebook, or a loop over fifty locus sets at 2 a.m., call it from Python: copy the worked example and edit to taste.
 - **[Reproducing the analyses](docs/reproducing-the-analyses.md)**: the benchmark and validation scripts of the manuscript.
+
+## Key strengths
+
+- **Laboratory reports in, ambiguity kept**: MAC, GL strings, GLS, HML and NGSengine, with MAC codes, allele lists and groups weighed by the EM.
+- **Nobody left behind**: people untyped or half-typed at some loci stay in the estimate.
+- **The whole MHC**: any IPD-IMGT/HLA locus, including MICA, MICB and the non-classical genes, at a resolution chosen per locus.
+- **Families and unrelated people**: pedigree phasing and checks, founder-only estimates, and population estimates in one tool.
+- **Reporting conventions built in**: blank second alleles and DRB3/4/5 filled as laboratories report them, and every fill counted.
+- **Fast and reproducible**: a Rust core, ten EM starts by default, results identical on any number of threads, and every run recorded in `run.json`.
+- **Hapl-o-Mat compatible**: its formats and parameter files are read, and from the same start the results agree.
 
 ## Limitations
 
