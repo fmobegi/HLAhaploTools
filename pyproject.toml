@@ -1,6 +1,6 @@
 [project]
 name = "hlahaplotools"
-version = "0.1.0"
+version = "0.1.0rc2"
 description = "Extended HLA and MHC haplotypes in families and populations: pedigree phasing, and EM frequency estimation that keeps untyped and half-typed loci"
 keywords = ["HLA", "MHC", "haplotype", "pedigree", "expectation-maximisation", "immunogenetics", "MICA", "Hapl-o-Mat"]
 classifiers = [

@@ -1,0 +1,142 @@
+# Build wheels for Linux, macOS and Windows and publish them to PyPI.
+#
+# Runs when a GitHub release is published (the same release Zenodo archives), or by hand.
+# The release tag must match the version in pyproject.toml: tag v0.1.0-rc2 <-> 0.1.0rc2,
+# tag v0.1.0 <-> 0.1.0. Pre-release versions (rc) are ignored by `pip install hlahaplotools`
+# and installed with `pip install --pre hlahaplotools`.
+#
+# One-time setup on pypi.org: Account settings > Publishing > add a pending publisher:
+# project hlahaplotools, owner fmobegi, repository HLAhaploTools, workflow pypi.yml,
+# environment pypi.
+
+name: PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check the version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          case "$version" in *dev*) echo "::error::$version is a development version; use the TestPyPI workflow"; exit 1;; esac
+          if [ -n "$TAG" ]; then
+            tag=$(python3 -c "import re,sys; t=sys.argv[1].lstrip('v'); print(re.sub(r'[-.]?(rc|a|b)[-.]?', r'\1', t))" "$TAG")
+            if [ "$tag" != "$version" ]; then echo "::error::release tag $TAG does not match pyproject.toml version $version"; exit 1; fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Publishing $version"
+
+  wheels:
+    name: Wheel (${{ matrix.name }})
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest, target: x86_64 }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm, target: aarch64 }
+          - { name: macos-x86_64, os: macos-latest, target: x86_64 }
+          - { name: macos-arm64, os: macos-latest, target: aarch64 }
+          - { name: windows-x64, os: windows-latest, target: x64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          args: --release --out dist
+          manylinux: auto
+          rust-toolchain: stable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist/*.whl
+
+  sdist:
+    name: Source package
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  test:
+    name: Install and run (${{ matrix.name }})
+    needs: wheels
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-latest }
+          - { name: linux-aarch64, os: ubuntu-24.04-arm }
+          - { name: macos-arm64, os: macos-latest }
+          - { name: windows-x64, os: windows-latest }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: examples
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheel-${{ matrix.name }}
+          path: dist
+      - name: Install the wheel in a clean environment
+        shell: bash
+        run: |
+          python -m venv venv
+          if [ -x venv/Scripts/python ]; then PY=venv/Scripts/python; else PY=venv/bin/python; fi
+          "$PY" -m pip install --quiet --no-index --find-links dist hlahaplotools
+          echo "BIN=$(dirname "$PY")" >> "$GITHUB_ENV"
+      - name: Run it
+        shell: bash
+        run: |
+          "$BIN/hlahaplotools" --version
+          "$BIN/hlahaplotools" download-data --skip-mac --data-dir data
+          curl -sfLO https://raw.githubusercontent.com/DKMS/Hapl-o-Mat/master/examplePopulations/populationData_b.glc
+          "$BIN/hlahaplotools" estimate populationData_b.glc --loci A:g,C:g,B:g,DRB1:g,DQB1:g,DPB1:g --data-dir data -o out/example
+          "$BIN/hlahaplotools" families examples/families/validated.csv \
+            --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f --data-dir data -o out/families
+
+  publish:
+    name: Publish to PyPI
+    needs: [check, wheels, sdist, test]
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/hlahaplotools/${{ needs.check.outputs.version }}/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1

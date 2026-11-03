@@ -1,7 +1,7 @@
 {
   "title": "HLAhaploTools",
   "upload_type": "software",
-  "version": "0.1.0-rc1",
+  "version": "0.1.0-rc2",
   "description": "<p>HLAhaploTools assigns and estimates extended HLA and MHC haplotypes. In families it phases haplotypes from inheritance; in unrelated people it estimates haplotype frequencies with an expectation-maximisation (EM) algorithm, keeping people who are untyped or half-typed at some loci. It reads laboratory typing reports (MAC, GL strings, GLS, HML, NGSengine), resolves any IPD-IMGT/HLA locus including MICA, MICB and the non-classical genes, and is compatible with Hapl-o-Mat.</p><p>This is a release candidate. Research use only: not validated for clinical use.</p>",
   "creators": [
     {

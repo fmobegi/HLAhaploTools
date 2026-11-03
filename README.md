@@ -90,6 +90,16 @@ hlahaplotools estimate INPUT --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/po
 hlahaplotools families FAMILY_TABLE --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/families  # families
 ```
 
+**Try it** on Hapl-o-Mat's public example population (100 people, GL strings, six loci):
+
+```bash
+curl -LO https://raw.githubusercontent.com/DKMS/Hapl-o-Mat/master/examplePopulations/populationData_b.glc
+hlahaplotools estimate populationData_b.glc --loci A:g,C:g,B:g,DRB1:g,DQB1:g,DPB1:g -o results/example
+head -5 results/example/hfs.dat
+```
+
+Hapl-o-Mat's [examplePopulations](https://github.com/DKMS/Hapl-o-Mat/tree/master/examplePopulations) also has the same kind of data as a MAC table (`populationData_a.dat`) and as GL identifiers (`populationData_c.pull` with `populationData_c.glid`). This repository's [examples/](examples) has a simulated population and family typings.
+
 Each command writes one folder:
 
 ```text
