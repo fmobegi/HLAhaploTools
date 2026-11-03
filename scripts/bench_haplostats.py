@@ -6,10 +6,12 @@ results (case.json). This runs haplo.em on the same input, scores it with the
 benchmark's own log-likelihood and adds it to a table beside the stored tools.
 A missing-typing case (--missing) is scored against the true frequencies only.
 
+Usually run through `benchmark.py haplostats` (all of it, see run_all); by hand:
+
     python3 scripts/bench_haplostats.py --out bench/haplostats \\
         --cases bench/paper/cases/sim_n1000_2loci,bench/paper/cases/real_2f_B_C_n5000 \\
         [--missing bench/paper/sim_ext/n2000_l10_mic_missing] [--n-try 10] \\
-        [--timeout 1800] [--mem-gb 6]
+        [--timeout 1800] [--mem-gb 6] [--rscript Rscript]
 
 Needs R with haplo.stats (R_LIBS_USER may point at a user library) and Linux
 (peak memory comes from getrusage; the memory cap uses prlimit).
@@ -19,14 +21,29 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from benchmark import canon, compare, log_likelihood, read_mac, read_hfs, save_freqs, timed  # noqa: E402
+from benchmark import (  # noqa: E402
+    ROOT,
+    canon,
+    compare,
+    log_likelihood,
+    prepare_real,
+    read_hfs,
+    read_mac,
+    run_ours,
+    save_freqs,
+    timed,
+    write_mac,
+)
 
 R_SCRIPT = Path(__file__).resolve().parent / "haplostats_em.R"
+RSCRIPT = ["Rscript"]  # command that runs R; set from --rscript (e.g. "module load R && Rscript" is not a command)
 
 
 def run_haplostats(work: Path, data: Path, n_try: int, seed: int, timeout: float, mem_gb: float | None) -> dict:
@@ -34,7 +51,7 @@ def run_haplostats(work: Path, data: Path, n_try: int, seed: int, timeout: float
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    cmd = ["Rscript", str(R_SCRIPT), str(data), str(out), str(n_try), str(seed)]
+    cmd = [*RSCRIPT, str(R_SCRIPT), str(data), str(out), str(n_try), str(seed)]
     if mem_gb and shutil.which("prlimit"):
         cmd = ["prlimit", f"--as={int(mem_gb * 2**30)}", *cmd]
     r = timed(cmd, out, timeout)
@@ -151,14 +168,125 @@ def report(results: list[dict], path: Path) -> None:
                                          r.get("seconds", ""), r.get("peak_mb", ""),
                                          r.get("vs_truth", {}).get("tvd", "")])))  # fmt: skip
         for tool, s in c["stored"].items():
-            lines.append("\t".join(map(str, [c["case"], c["n"], tool, s.get("status", "ok"), s.get("delta_logl", ""),
-                                             s.get("seconds", ""), s.get("peak_mb", ""), s.get("tvd_truth", "")])))  # fmt: skip
+            cells = [c["case"], c["n"], tool, s.get("status", "ok"), s.get("delta_logl", ""), s.get("seconds", ""),
+                     s.get("peak_mb", ""), s.get("tvd_truth", "")]  # fmt: skip
+            lines.append("\t".join(map(str, cells)))
     path.write_text("\n".join(lines) + "\n")
     print(f"\nWrote {path}")
 
 
+# ------------------------------------------------------------------ sets with untyped loci
+
+C8 = ["A", "B", "C", "DRB1", "DQB1", "DPB1", "DQA1", "DPA1"]
+SIM_SETS = {  # name: (loci, the two loci left untyped, share of individuals untyped at each)
+    "l4_r30": (C8[:4], C8[2:4], 0.3),
+    "l6_r30": (C8[:6], C8[4:6], 0.3),
+    "l8_r30": (C8, C8[6:8], 0.3),
+    "l10_r30": (C8 + ["MICA", "MICB"], ["MICA", "MICB"], 0.3),
+    "l6_r10": (C8[:6], C8[4:6], 0.1),
+    "l8_r10": (C8, C8[6:8], 0.1),
+    "l10_r10": (C8 + ["MICA", "MICB"], ["MICA", "MICB"], 0.1),
+}
+REAL_SETS = {  # name: (loci, loci that may be untyped, as in the cohort)
+    "DQA1_DQB1": (["DQA1", "DQB1"], {"DQA1"}),
+    "DRB1_DQA1_DQB1": (["DRB1", "DQA1", "DQB1"], {"DQA1"}),
+    "class2": (["DRB1", "DQA1", "DQB1", "DPA1", "DPB1"], {"DQA1", "DPA1"}),
+    "classical8": (C8, {"DQA1", "DPA1"}),
+}
+
+
+def _ours(sim: Path, data: Path, loci, threads: int, timeout: float) -> None:
+    """hlahaplotools (10 starts) on a set, next to it: ours.json and freqs_hlahaplotools.tsv."""
+    r = run_ours(sim, data, loci, 1e-6, threads, timeout, starts=10)
+    freqs = r.pop("freqs", None)
+    r.pop("stdout", None)
+    if freqs is not None:
+        save_freqs(sim / "freqs_hlahaplotools.tsv", freqs)
+        if (sim / "truth.tsv").exists():
+            r["tvd_truth"] = compare(freqs, read_hfs(sim / "truth.tsv"))["tvd"]
+        r.pop("stderr", None)
+    (sim / "ours.json").write_text(json.dumps(r, indent=2) + "\n")
+    print(
+        f"  hlahaplotools {sim.name}: {r.get('status')} {r.get('seconds', 0):.1f}s {r.get('peak_mb', 0):.0f} MB",
+        flush=True,
+    )
+
+
+def build_missing_sim(out: Path, n: int = 2000, seed: int = 1, threads: int = 8, timeout: float = 3600) -> list[Path]:
+    """Simulated populations with two loci untyped in some individuals, and hlahaplotools on each."""
+    dirs = []
+    for name, (loci, miss, rate) in SIM_SETS.items():
+        sim = out / name
+        sim.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "simulate.py"), str(sim), "--samples", str(n),
+             "--loci", ",".join(loci), "--haplotypes", "300", "--alleles", "25", "--seed", str(seed),
+             "--missing", ",".join(f"{l}:{rate}" for l in miss)],
+            check=True, capture_output=True,
+        )  # fmt: skip
+        _ours(sim, sim / "population.dat", loci, threads, timeout)
+        dirs.append(sim)
+    return dirs
+
+
+def build_missing_real(real: Path, out: Path, n: int = 5000, seed: int = 1, threads: int = 8,
+                       timeout: float = 3600) -> list[Path]:  # fmt: skip
+    """Samples of the real cohort with its own untyped DQA1/DPA1, and hlahaplotools on each."""
+    import hlahaplotools as h
+
+    manifest = json.loads((ROOT / "data" / "manifest.json").read_text())
+    nom = h.Nomenclature(str(ROOT / "data" / "derived" / manifest["imgthla"]["release"]))
+    dirs = []
+    for name, (loci, untyped) in REAL_SETS.items():
+        rows, info = prepare_real(real, loci, "2f", nom, n, seed, may_be_untyped=untyped)
+        sim = out / name
+        sim.mkdir(parents=True, exist_ok=True)
+        write_mac(sim / "population.dat", loci, rows)
+        _ours(sim, sim / "population.dat", loci, threads, timeout)
+        r = json.loads((sim / "ours.json").read_text())
+        r["info"] = {**info, "incompletely_typed": sum(1 for _, per in rows if not all(a for a, _ in per))}
+        (sim / "ours.json").write_text(json.dumps(r, indent=2) + "\n")
+        dirs.append(sim)
+    return dirs
+
+
+def run_all(root: Path, real: Path | None, case_dirs: list[Path], *, n_try=10, seed=1, timeout=1800.0, mem_gb=6.0,
+            retry_gb=12.0, threads=8) -> int:  # fmt: skip
+    """Every haplo.stats run of the paper, in the folder layout tables_and_figures.py reads (under root):
+    haplostats/ (fully typed cases), missing_typing/ and real_missing/ (sets with untyped loci, with
+    hlahaplotools), haplostats_missing/ and haplostats_real_missing/ (haplo.stats at mem_gb), and
+    haplostats_12gb/ (the runs that failed, again at retry_gb)."""
+    args = argparse.Namespace(out=str(root / "haplostats"), n_try=n_try, seed=seed, timeout=timeout, mem_gb=mem_gb,
+                              missing_ours="")  # fmt: skip
+    cases = sorted(d for base in case_dirs if base.exists() for d in base.iterdir()
+                   if (d / "input.dat").exists() and (d / "freqs_reference.tsv").exists())  # fmt: skip
+    Path(args.out).mkdir(parents=True, exist_ok=True)
+    done = [complete_case(c, args) for c in cases]
+    (Path(args.out) / "haplostats.json").write_text(json.dumps(done, indent=2) + "\n")
+    report(done, Path(args.out) / "haplostats.tsv")
+
+    groups = [("haplostats_missing", build_missing_sim(root / "missing_typing", seed=seed, threads=threads))]
+    if real:
+        groups.append(("haplostats_real_missing", build_missing_real(real, root / "real_missing", seed=seed,
+                                                                     threads=threads)))  # fmt: skip
+    failed = []
+    for name, dirs in groups:
+        args.out = str(root / name)
+        res = [missing_case(d, args) for d in dirs]
+        (root / name / "haplostats.json").write_text(json.dumps(res, indent=2) + "\n")
+        report(res, root / name / "haplostats.tsv")
+        failed += [d for d, r in zip(dirs, res, strict=True) if r["haplo.stats"]["status"] != "ok"]
+    if failed and retry_gb and retry_gb > mem_gb:
+        args.out, args.mem_gb = str(root / "haplostats_12gb"), retry_gb
+        res = [missing_case(d, args) for d in failed]
+        (root / "haplostats_12gb" / "haplostats.json").write_text(json.dumps(res, indent=2) + "\n")
+        report(res, root / "haplostats_12gb" / "haplostats.tsv")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--rscript", default="Rscript", help="command that runs R scripts (default Rscript)")
     p.add_argument("--out", required=True)
     p.add_argument("--cases", default="", help="comma-separated case folders from benchmark.py")
     p.add_argument("--missing", default="", help="comma-separated simulation folders with population.dat and truth.tsv")
@@ -168,6 +296,7 @@ def main() -> int:
     p.add_argument("--timeout", type=float, default=1800)
     p.add_argument("--mem-gb", type=float, default=6)
     args = p.parse_args()
+    RSCRIPT[:] = shlex.split(args.rscript)
     Path(args.out).mkdir(parents=True, exist_ok=True)
     results = [complete_case(Path(c), args) for c in args.cases.split(",") if c]
     results += [missing_case(Path(m), args) for m in args.missing.split(",") if m]

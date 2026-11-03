@@ -1,6 +1,18 @@
-"""Benchmark hlahaplotools against Hapl-o-Mat and PyPop.
+"""Benchmark hlahaplotools against Hapl-o-Mat, PyPop and haplo.stats: every analysis of the paper.
 
-All three tools get the *same* input: people fully typed at the chosen loci,
+Every benchmark of the paper, into one folder, then the metrics into one archive (no typing data):
+
+    uv run python scripts/benchmark.py all --out runs/hpc1 --real cohort.dat [--threads 1,8,32] \\
+        [--rscript Rscript] [--plasmode-reps 3] [--steps run,extended,...] [--skip haplostats]
+    uv run python scripts/benchmark.py pack --out runs/hpc1 --real cohort.dat   # -> runs/hpc1_metrics.tar.gz
+
+`all` runs, in order: run, run-extra, extended, multistart, bootstrap, full-cohort, stats, plasmode,
+completion, missing, haplostats, report; each is also a subcommand of its own. A step that fails is
+recorded in steps.tsv and the next one runs; environment.json records the machine and settings.
+Tool paths are options (--haplomat, --pypop, --rscript), so the same commands run on a laptop or a
+cluster node; on a scheduler, submit `all` as one job or the steps as separate jobs (same --out).
+
+All tools get the *same* input: people fully typed at the chosen loci,
 each typing a single allele name (no ambiguity, no missing data), used as
 typed. Differences therefore come from the EM, not from how the tools read
 nomenclature. Each case is scored against a reference: hlahaplotools run to a
@@ -95,9 +107,7 @@ def write_pop(path: Path, loci: list[str], rows) -> None:
             f.write(sid + "\t" + "\t".join(f"{a.split('*')[1]}\t{b.split('*')[1]}" for a, b in per) + "\n")
 
 
-def prepare_real(
-    src: Path, loci: list[str], resolution: str, nom, n: int | None, seed: int, may_be_untyped=()
-):
+def prepare_real(src: Path, loci: list[str], resolution: str, nom, n: int | None, seed: int, may_be_untyped=()):
     """People fully typed at `loci`, each typing reduced to one name at `resolution`.
 
     A typing that maps to more than one name (a G group, a MAC code) leaves the
@@ -776,6 +786,313 @@ def cmd_report(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ the rest of the paper, and `all`
+
+# Whole-cohort locus sets (Table 5); classical8 and routine11 are also the truths of the plasmode runs.
+COHORT_SETS = {
+    "DRB1_DQB1": "DRB1,DQB1",
+    "DQA1_DQB1": "DQA1,DQB1",
+    "DPA1_DPB1": "DPA1,DPB1",
+    "ABC": "A,B,C",
+    "DRB1_DRB345": "DRB1,DRB3,DRB4,DRB5",
+    "ABC_DRB1": "A,B,C,DRB1",
+    "ABC_DRB1_DQB1": "A,B,C,DRB1,DQB1",
+    "class2": "DRB1,DQA1,DQB1,DPA1,DPB1",
+    "classical6": "A,B,C,DRB1,DQB1,DPB1",
+    "ABC_DQ_DP": "A,B,C,DQA1,DQB1,DPA1,DPB1",
+    "classical8": "A,B,C,DRB1,DQB1,DPB1,DQA1,DPA1",
+    "routine9_noDQA1DPA1": "A,B,C,DRB1,DRB3,DRB4,DRB5,DQB1,DPB1",
+    "routine11": "A,B,C,DRB1,DRB3,DRB4,DRB5,DQB1,DPB1,DQA1,DPA1",
+}
+ROUTINE11 = "A,B,C,DRB1,DRB3,DRB4,DRB5,DQA1,DQB1,DPA1,DPB1"
+
+
+def _estimate_cmd(data: Path, loci: str, out: Path, resolution: str, *extra) -> list[str]:
+    spec = ",".join(f"{l}:{resolution}" for l in loci.split(","))
+    return [sys.executable, "-m", "hlahaplotools", "estimate", str(Path(data).resolve()), "--loci", spec,
+            "-o", str(Path(out).resolve()), "--data-dir", str(ROOT / "data"), *map(str, extra)]  # fmt: skip
+
+
+def _script(name: str, *a) -> int:
+    cmd = [sys.executable, str(ROOT / "scripts" / name), *map(str, a)]
+    print("$ " + " ".join(cmd[1:]), flush=True)
+    return subprocess.run(cmd, cwd=ROOT).returncode
+
+
+def cmd_full_cohort(args) -> int:
+    """Haplotype frequencies of every locus set for the whole cohort (everyone typed at its loci)."""
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = ["set\tloci\texit\tseconds\tpeak_MB"]
+    for name, loci in COHORT_SETS.items():
+        if args.only and name not in args.only.split(","):
+            continue
+        cmd = _estimate_cmd(Path(args.real), loci, out / name, args.resolution, "--starts", args.starts)
+        if args.threads:
+            cmd += ["--threads", str(args.threads)]
+        r = timed(cmd, ROOT, args.timeout)
+        (out / f"{name}.log").write_text(r.get("stdout", "") + r.get("stderr", ""))
+        code = "0" if r["status"] == "ok" else r["status"]
+        rows.append(f"{name}\t{loci}\t{code}\t{r.get('seconds', 0):.1f}\t{r.get('peak_mb', 0):.0f}")
+        print(f"  {name:22} {r['status']}  {r.get('seconds', 0):.1f}s  {r.get('peak_mb', 0):.0f} MB", flush=True)
+    (out / "summary.tsv").write_text("\n".join(rows) + "\n")
+    return 0
+
+
+def cmd_stats(args) -> int:
+    """Hardy-Weinberg proportions and linkage disequilibrium of the cohort (hlahaplotools stats)."""
+    spec = ",".join(f"{l}:{args.resolution}" for l in args.loci.split(","))
+    cmd = [sys.executable, "-m", "hlahaplotools", "stats", str(Path(args.real).resolve()), "--loci", spec,
+           "-o", str(Path(args.out).resolve()), "--permutations", str(args.permutations),
+           "--ld-permutations", str(args.ld_permutations), "--data-dir", str(ROOT / "data")]  # fmt: skip
+    print("$ hlahaplotools stats ...", flush=True)
+    return subprocess.run(cmd, cwd=ROOT).returncode
+
+
+def cmd_plasmode(args) -> int:
+    """Plasmode simulations of the cohort: its 8- and 11-locus estimates (full-cohort) taken as the truth."""
+    code = 0
+    for name in args.sets.split(","):
+        truth = Path(args.full_cohort) / name / "hfs.dat"
+        if not truth.exists():
+            print(f"  {name}: {truth} is missing (run full-cohort first)")
+            code = 1
+            continue
+        code |= _script("plasmode.py", truth.resolve(), Path(args.real).resolve(), "-o",
+                        (Path(args.out) / name).resolve(), "--reps", args.reps, "--seed", args.seed,
+                        "--starts", args.starts)  # fmt: skip
+    return code
+
+
+def cmd_completion(args) -> int:
+    """Linked against exhaustive completion: against the truth in simulations (Table 3), and memory and
+    candidates on a sample of the cohort at the eight classical loci."""
+    out = Path(args.out)
+    code = _script("completion_truth.py", "--n", args.n, "--rate", args.rate, "--reps", args.reps,
+                   "--out", (out / "completion_truth.json").resolve())  # fmt: skip
+    if args.real:
+        mem = out / "mem"
+        mem.mkdir(parents=True, exist_ok=True)
+        lines = Path(args.real).read_text(encoding="utf-8-sig").splitlines()
+        pick = random.Random(args.seed).sample(lines[1:], min(args.sample, len(lines) - 1))
+        (mem / f"s{args.sample}.dat").write_text("\n".join([lines[0], *pick]) + "\n")
+        for mode in ("linked", "all"):
+            r = timed(_estimate_cmd(mem / f"s{args.sample}.dat", "A,B,C,DRB1,DQB1,DPB1,DQA1,DPA1", mem / f"c_{mode}",
+                                    args.resolution, "--starts", 1, "--cut", 0, "--completion", mode, "-q"),
+                      ROOT, args.timeout)  # fmt: skip
+            (mem / f"c_{mode}.json").write_text(json.dumps({k: v for k, v in r.items() if k != "stdout"}, indent=2))
+            print(
+                f"  completion {mode}: {r['status']} {r.get('seconds', 0):.1f}s {r.get('peak_mb', 0):.0f} MB",
+                flush=True,
+            )
+    return code
+
+
+def cmd_missing(args) -> int:
+    """Untyped and half-typed loci in simulations (the 'Incomplete typing' results)."""
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    code = _script("validate_missing.py", "--out", out / "vm_rates.md")
+    code |= _script("validate_missing.py", "--rates", "0.1,0.3", "--half-rate", "0.15", "--out", out / "vm_half.md")
+    code |= _script("validate_missing.py", "--blank", "B,C,DQB1", "--rates", "0.3", "--out", out / "vm_bcd.md")
+    return code
+
+
+def cmd_haplostats(args) -> int:
+    """haplo.stats on the fully typed cases of `run` and `extended`, and on sets with untyped loci."""
+    import shlex
+
+    import bench_haplostats as hs
+
+    hs.RSCRIPT[:] = shlex.split(args.rscript)
+    root = Path(args.out)
+    bases = (
+        [Path(b) for b in args.cases.split(",")]
+        if args.cases
+        else [root / "paper" / "cases", root / "paper_real_extra" / "cases"]
+    )
+    return hs.run_all(root, Path(args.real) if args.real else None, bases, timeout=args.timeout, mem_gb=args.mem_gb,
+                      retry_gb=args.retry_gb, threads=args.hs_threads, seed=args.seed)  # fmt: skip
+
+
+STEPS = ["run", "run-extra", "extended", "multistart", "bootstrap", "full-cohort", "stats", "plasmode",
+         "completion", "missing", "haplostats", "report"]  # fmt: skip
+
+
+def cmd_all(args) -> int:
+    """Every benchmark of the paper into one folder, step by step; a step that fails is recorded and the
+    next one runs. steps.tsv lists each step's exit code and time, environment.json the machine."""
+    out = Path(args.out).resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    real = str(Path(args.real).resolve())
+    paper = out / "paper"
+    me = [sys.executable, str(Path(__file__).resolve())]
+    t = ",".join(map(str, args.threads))
+    tools = ["--haplomat", args.haplomat, "--pypop", args.pypop]
+    plan = {
+        "run": [
+            "run",
+            "--out",
+            paper,
+            "--real",
+            real,
+            "--sizes",
+            "1000,5000",
+            "--threads",
+            t,
+            "--timeout",
+            args.timeout,
+            *tools,
+        ],
+        "run-extra": [
+            "run",
+            "--out",
+            out / "paper_real_extra",
+            "--real",
+            real,
+            "--sizes",
+            "",
+            "--threads",
+            t,
+            "--real-sets",
+            "A~B~C~DRB1~DQB1~DPB1~DQA1~DPA1,DRB1~DQA1~DQB1~DPA1~DPB1",
+            "--timeout",
+            args.timeout,
+            *tools,
+        ],
+        "extended": [
+            "extended",
+            "--out",
+            paper,
+            "--n",
+            2000,
+            "--ref-starts",
+            20,
+            "--threads",
+            max(args.threads),
+            "--timeout",
+            args.timeout,
+            *tools,
+        ],
+        "multistart": [
+            "multistart",
+            "--out",
+            paper,
+            "--real",
+            real,
+            "--real-n",
+            5000,
+            "--starts",
+            20,
+            "--sets",
+            "A,B,C;A,B,C,DRB1;A,B,C,DRB1,DQB1;A,B,C,DRB1,DQB1,DPB1",
+        ],
+        "bootstrap": [
+            "bootstrap",
+            "--out",
+            paper,
+            "--real",
+            real,
+            "--replicates",
+            200,
+            "--sets",
+            "DRB1,DQB1;A,B,C;A,B,C,DRB1",
+        ],
+        "full-cohort": ["full-cohort", "--out", out / "full_cohort", "--real", real, "--threads", max(args.threads)],
+        "stats": ["stats", "--out", out / "full_cohort" / "stats", "--real", real],
+        "plasmode": [
+            "plasmode",
+            "--out",
+            out / "plasmode",
+            "--real",
+            real,
+            "--full-cohort",
+            out / "full_cohort",
+            "--reps",
+            args.plasmode_reps,
+        ],
+        "completion": ["completion", "--out", out, "--real", real],
+        "missing": ["missing", "--out", out],
+        "haplostats": ["haplostats", "--out", out, "--real", real, "--rscript", args.rscript],
+        "report": ["report", "--out", paper],
+    }
+    only, skip = (args.steps or "").split(","), (args.skip or "").split(",")
+    todo = [s for s in STEPS if (not args.steps or s in only) and s not in skip]
+    (out / "environment.json").write_text(json.dumps({**environment(), "steps": todo, "settings": vars(args)},
+                                                     indent=2, default=str) + "\n")  # fmt: skip
+    log = out / "steps.tsv"
+    if not log.exists():
+        log.write_text("step\texit\tseconds\tstarted\n")
+    for s in todo:
+        print(f"\n### {time.strftime('%H:%M:%S')} {s}", flush=True)
+        t0, started = time.perf_counter(), time.strftime("%Y-%m-%d %H:%M:%S")
+        code = subprocess.run([*me, *map(str, plan[s])], cwd=ROOT).returncode
+        with log.open("a") as f:
+            f.write(f"{s}\t{code}\t{time.perf_counter() - t0:.0f}\t{started}\n")
+    print(f"\nDone: {out}. Bring the metrics back with: benchmark.py pack --out {out} --real {real}")
+    return 0
+
+
+# Files a returned run needs for the tables, figures and audit; inputs (typings) are left behind.
+PACK_KEEP = ("*.json", "*.tsv", "*.md", "*.log", "hfs.dat", "summary.tsv")
+PACK_DROP = ("input.dat", "input.pop", "population.dat", "population_full.dat", "population_complete_only.dat")
+
+
+def cmd_pack(args) -> int:
+    """One archive of the metrics of a run (tables, figures, audit), without any typing data.
+
+    Logs and run.json name individuals left out of an estimate. With --real (the cohort file), every
+    sample ID of the cohort found in a packed text file is replaced by "[id]"; without it, logs are left
+    out and the left-out lists are removed from run.json."""
+    import fnmatch
+    import io
+    import tarfile
+
+    out = Path(args.out).resolve()
+    dest = Path(args.archive) if args.archive else out.with_name(out.name + "_metrics.tar.gz")
+    ids = set()
+    if args.real:
+        for line in Path(args.real).read_text(encoding="utf-8-sig").splitlines()[1:]:
+            if line.strip():
+                ids.add(line.split("\t")[0].strip())
+    token = re.compile(r"[A-Za-z0-9_.\-]+")
+    n = size = redacted = 0
+    with tarfile.open(dest, "w:gz") as tar:
+        for p in sorted(out.rglob("*")):
+            if not p.is_file() or p.name in PACK_DROP or p.suffix == ".dat" and p.name != "hfs.dat":
+                continue
+            if not (any(fnmatch.fnmatch(p.name, k) for k in PACK_KEEP) or p.name.startswith("freqs_")):
+                continue
+            if p.stat().st_size > args.max_mb * 2**20:
+                print(f"  skipped (over {args.max_mb} MB): {p.relative_to(out)}")
+                continue
+            arc = str(Path(out.name) / p.relative_to(out))
+            if p.name == "hfs.dat" or p.name.startswith("freqs_"):  # haplotype names and frequencies only
+                tar.add(p, arcname=arc)
+            else:
+                if not ids and p.suffix == ".log":
+                    continue
+                text = p.read_text(encoding="utf-8", errors="replace")
+                if ids:
+                    new = token.sub(lambda m: "[id]" if m.group(0) in ids else m.group(0), text)
+                    redacted += new != text
+                    text = new
+                elif p.name == "run.json" and "samples_left_out" in text:
+                    info = json.loads(text)
+                    info["samples_left_out"] = f"{len(info['samples_left_out'])} individuals (list removed)"
+                    text = json.dumps(info, indent=2) + "\n"
+                    redacted += 1
+                data = text.encode("utf-8")
+                ti = tarfile.TarInfo(arc)
+                ti.size, ti.mtime = len(data), int(p.stat().st_mtime)
+                tar.addfile(ti, io.BytesIO(data))
+            n, size = n + 1, size + p.stat().st_size
+    how = (f"cohort sample IDs replaced in {redacted} files" if ids
+           else f"left-out lists removed in {redacted} files, logs left out")  # fmt: skip
+    print(f"Wrote {dest}: {n} files, {size / 2**20:.1f} MB before compression; no typing data; {how}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -847,13 +1164,83 @@ def main() -> int:
     rep.add_argument("--out", default="bench/results")
     rep.set_defaults(func=cmd_report)
 
+    fc = sub.add_parser("full-cohort", help="every locus set for the whole cohort (Table 5)")
+    common(fc)
+    fc.add_argument("--starts", type=int, default=10)
+    fc.add_argument("--threads", type=int, help="estimation threads (default: all cores)")
+    fc.add_argument("--only", help="comma-separated set names, e.g. classical8,routine11")
+    fc.add_argument("--timeout", type=float, default=7200)
+    fc.set_defaults(func=cmd_full_cohort)
+
+    st = sub.add_parser("stats", help="Hardy-Weinberg and linkage disequilibrium of the cohort")
+    common(st)
+    st.add_argument("--loci", default=ROUTINE11)
+    st.add_argument("--permutations", type=int, default=10_000)
+    st.add_argument("--ld-permutations", type=int, default=1999)
+    st.set_defaults(func=cmd_stats)
+
+    pl = sub.add_parser("plasmode", help="plasmode simulations of the cohort (needs full-cohort)")
+    common(pl)
+    pl.add_argument("--full-cohort", default="results/full_cohort", help="folder of the full-cohort estimates")
+    pl.add_argument("--sets", default="classical8,routine11")
+    pl.add_argument("--reps", type=int, default=3)
+    pl.add_argument("--starts", type=int, default=10)
+    pl.set_defaults(func=cmd_plasmode)
+
+    co = sub.add_parser("completion", help="linked against exhaustive completion (Table 3; memory on the cohort)")
+    common(co)
+    co.add_argument("--n", type=int, default=3000)
+    co.add_argument("--rate", type=float, default=0.3)
+    co.add_argument("--reps", type=int, default=3)
+    co.add_argument("--sample", type=int, default=2000, help="individuals sampled from --real for the memory run")
+    co.add_argument("--timeout", type=float, default=7200)
+    co.set_defaults(func=cmd_completion)
+
+    mi = sub.add_parser("missing", help="untyped and half-typed loci in simulations")
+    mi.add_argument("--out", default="bench")
+    mi.set_defaults(func=cmd_missing)
+
+    hs = sub.add_parser("haplostats", help="haplo.stats on the stored cases and on sets with untyped loci")
+    common(hs)
+    hs.add_argument(
+        "--cases", help="comma-separated case folders (default: OUT/paper/cases and OUT/paper_real_extra/cases)"
+    )
+    hs.add_argument("--rscript", default="Rscript", help="command that runs R with haplo.stats")
+    hs.add_argument("--mem-gb", type=float, default=6)
+    hs.add_argument("--retry-gb", type=float, default=12, help="memory for a second try of the runs that failed")
+    hs.add_argument("--hs-threads", type=int, default=8, help="hlahaplotools threads on the untyped sets")
+    hs.add_argument("--timeout", type=float, default=1800)
+    hs.set_defaults(func=cmd_haplostats)
+
+    al = sub.add_parser("all", help="every benchmark of the paper into one folder (then: pack)")
+    al.add_argument("--out", required=True, help="run folder, e.g. runs/hpc1")
+    al.add_argument("--real", required=True, help="MAC typing file of the cohort")
+    al.add_argument(
+        "--threads", default="1,8", help="hlahaplotools thread counts to time (the largest is used elsewhere)"
+    )
+    al.add_argument("--timeout", type=float, default=3600, help="per tool and case, seconds")
+    al.add_argument("--plasmode-reps", type=int, default=3)
+    al.add_argument("--rscript", default="Rscript")
+    al.add_argument("--haplomat", default=str(HAPLOMAT))
+    al.add_argument("--pypop", default=str(PYPOP))
+    al.add_argument("--steps", help=f"only these steps, comma-separated: {','.join(STEPS)}")
+    al.add_argument("--skip", help="steps to leave out, comma-separated")
+    al.set_defaults(func=cmd_all)
+
+    pk = sub.add_parser("pack", help="archive the metrics of a run folder, without typing data")
+    pk.add_argument("--out", required=True, help="run folder")
+    pk.add_argument("--archive", help="archive path (default: <run>_metrics.tar.gz next to the run)")
+    pk.add_argument("--max-mb", type=float, default=50, help="leave out single files larger than this")
+    pk.add_argument("--real", help="the cohort file: its sample IDs are replaced by [id] in the archive")
+    pk.set_defaults(func=cmd_pack)
+
     args = ap.parse_args()
-    if getattr(args, "threads", None) is not None:
+    if isinstance(getattr(args, "threads", None), str):
         args.threads = [int(t) for t in args.threads.split(",")]
-    if getattr(args, "sets", None) is not None and isinstance(args.sets, str):
+    if args.cmd in ("multistart", "bootstrap"):
         args.sets = [s.split(",") for s in args.sets.split(";")]
-    if args.cmd in ("multistart", "bootstrap") and not args.real:
-        sys.exit("error: --real is needed for multistart and bootstrap")
+    if args.cmd in ("multistart", "bootstrap", "full-cohort", "stats", "plasmode") and not args.real:
+        sys.exit(f"error: --real is needed for {args.cmd}")
     return args.func(args)
 
 

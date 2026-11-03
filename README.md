@@ -427,6 +427,15 @@ Work is split into fixed-size chunks that do not depend on the thread count, and
 
 All results below are reproducible with the scripts in [scripts/](scripts). Simulated populations draw real allele names from IMGT/HLA 3.66.0 and give haplotypes skewed (Zipf-like) frequencies. Error is the total variation distance between estimated and true haplotype frequencies (0 = identical).
 
+Every benchmark of the paper runs from one command, into one folder, on a laptop or a cluster node:
+
+```bash
+uv run python scripts/benchmark.py all --out runs/run1 --real COHORT.dat --threads 1,8 --rscript Rscript
+uv run python scripts/benchmark.py pack --out runs/run1 --real COHORT.dat   # runs/run1_metrics.tar.gz
+```
+
+`all` runs each step in turn (`run`, `run-extra`, `extended`, `multistart`, `bootstrap`, `full-cohort`, `stats`, `plasmode`, `completion`, `missing`, `haplostats`, `report`; each is also a subcommand) and records exit codes and times in `steps.tsv` and the machine in `environment.json`. Use `--steps` or `--skip` to run part of it, `--haplomat`, `--pypop` and `--rscript` to point at the other tools, and `--plasmode-reps` for more plasmode replicates. `pack` keeps the metrics (JSON, TSV, logs, estimated frequencies), leaves out every typing file, and replaces the cohort's sample IDs (from `--real`) wherever logs or `run.json` name an individual.
+
 ### Agreement with an established implementation
 
 From the same start, frequencies agree with Hapl-o-Mat's to within 10⁻¹⁰ on its example populations in every input format it reads (`scripts/compare_haplomat.py`, run by the test suite).
