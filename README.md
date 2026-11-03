@@ -1,5 +1,8 @@
 # HLAhaploTools
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23906129.svg)](https://doi.org/10.5281/zenodo.23906129)
+[![CI](https://github.com/fmobegi/HLAhaploTools/actions/workflows/ci.yml/badge.svg)](https://github.com/fmobegi/HLAhaploTools/actions/workflows/ci.yml)
+
 HLAhaploTools assigns and estimates extended HLA and MHC haplotypes. In families it phases haplotypes from inheritance; in unrelated people it estimates haplotype frequencies with an expectation–maximisation (EM) algorithm, keeping people who are untyped or half-typed at some loci.
 
 > [!CAUTION]
@@ -176,7 +179,11 @@ Maintenance and future developments will be led by Fredrick M. Mobegi. Feel free
 
 ## Citation
 
-A manuscript describing HLAhaploTools is in preparation. Until it is published, please cite this [repository](https://github.com/fmobegi/HLAhaploTools) with the version used, and report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`. Please also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and the data preprocessing methods that HLAhaploTools reimplements.
+A manuscript describing HLAhaploTools is in preparation. Until it is published, please cite the version you used, archived on Zenodo:
+
+> Mobegi FM. HLAhaploTools (version 0.1.0-rc1). Zenodo; 2026. [doi:10.5281/zenodo.23906130](https://doi.org/10.5281/zenodo.23906130)
+
+[doi:10.5281/zenodo.23906129](https://doi.org/10.5281/zenodo.23906129) always resolves to the latest version. GitHub's "Cite this repository" button gives the same citation in other formats. Report the IPD-IMGT/HLA release and MAC table date recorded in `run.json`. Please also cite the original [Hapl-o-Mat](https://pmc.ncbi.nlm.nih.gov/articles/PMC5450239/) paper for the EM algorithm and the data preprocessing methods that HLAhaploTools reimplements.
 
 ## License
 

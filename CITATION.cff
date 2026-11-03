@@ -13,6 +13,14 @@ authors:
     affiliation: "PathWest Laboratory Medicine WA; The University of Western Australia"
 version: "0.1.0-rc1"
 date-released: "2026-11-03"
+doi: "10.5281/zenodo.23906130"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.23906130"
+    description: "This version (0.1.0-rc1)"
+  - type: doi
+    value: "10.5281/zenodo.23906129"
+    description: "All versions (resolves to the latest)"
 license: GPL-3.0-or-later
 repository-code: "https://github.com/fmobegi/HLAhaploTools"
 keywords:
