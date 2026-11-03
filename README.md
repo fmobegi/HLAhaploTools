@@ -155,7 +155,7 @@ Tests that need the reference data are skipped until `scripts/build_nomenclature
 
 ## Credits
 
-HLAhaploTools was originally written by Fredrick M. Mobegi: [@fmobegi](https://github.com/fmobegi) at the Department of Clinical Immunology, [PathWest Laboratory Medicine WA](https://pathwest.health.wa.gov.au/), and [The University of Western Australia](https://www.uwa.edu.au/).
+HLAhaploTools was originally written by Fredrick M. Mobegi ([ORCID 0000-0003-0554-9919](https://orcid.org/0000-0003-0554-9919)): [@fmobegi](https://github.com/fmobegi) at the Department of Clinical Immunology, [PathWest Laboratory Medicine WA](https://pathwest.health.wa.gov.au/), and [The University of Western Australia](https://www.uwa.edu.au/).
 
 We thank the following people for their assistance in the development and testing of HLAhaploTools:
 
