@@ -25,6 +25,24 @@ wheels/
 /bench/
 /benchmark.md
 
+# Benchmark and validation runs (docs/reproducing-the-analyses.md), and their metric archives
+/runs/
+*_metrics.tar.gz
+
+# Laboratory typing and review documents: real typing data is never committed
+*.xlsx
+*.xls
+*.docx
+*.hml
+~$*
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
 # Local environment, credentials and crash logs
 .Renviron
 Renviron
