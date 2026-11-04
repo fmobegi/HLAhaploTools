@@ -129,6 +129,41 @@ results/
 - **[Python API](docs/python-api.md)**: if HLAhaploTools is one cog in a bigger machine, a Snakemake or Nextflow pipeline, a Jupyter notebook, or a loop over fifty locus sets at 2 a.m., call it from Python: copy the worked example and edit to taste.
 - **[Reproducing the analyses](docs/reproducing-the-analyses.md)**: the benchmark and validation scripts of the manuscript.
 
+## Family typing, step by step
+
+1. **Make a family table**: one row per person, with `FAMILY_ID`, `Family_Member` (`F`, `M`, `C1`, `C2`…), an optional `Sample_ID`, and two columns per locus (`A_1`, `A_2`…). MAC codes, allele lists and a blank second allele (homozygous) are fine; see [Family table](docs/getting-started.md#family-table-csv-tsv).
+2. **Update retired allele names** (e.g. `C*04:09N`, now `C*04:09L`): `hlahaplotools rename families.csv families_current.csv`.
+3. **Phase and check the families**:
+
+   ```bash
+   hlahaplotools families families_current.csv \
+     --loci A:2f,C:2f,B:2f,DRB1:2f,DRB3:2f,DRB4:2f,DRB5:2f,DQA1:2f,DQB1:2f,DPA1:2f,DPB1:2f -o results/families
+   ```
+
+4. **Read the answers** in `results/families/`:
+
+   | Question | Where |
+   | --- | --- |
+   | Which haplotypes did each child inherit (AC, AD, BC, BD)? | `children.tsv` |
+   | What are each family's haplotypes, gene by gene? | `phases.tsv`: `hap_A`, `hap_B` (father), `hap_C`, `hap_D` (mother), e.g. `A*01:01~C*07:01~B*08:01~DRB1*03:01~…`; `LOCUS*?` where the family does not decide |
+   | Were untyped parents rebuilt from the children? | `phases.tsv`, `notes` ("father not typed: rebuilt from the children where possible") |
+   | Which families could not be phased, and why? | `phases.tsv` (`status`: complete, partial, failed, with the reason in `notes`) and `mendel.tsv` |
+   | Wrong parent, sample swap, half-sibling, duplicate, recombinant? | `flags.tsv`: check these first |
+   | Haplotype frequencies (EM on the founders, most frequent first)? | `hfs.dat`, and each founder's most likely pair in `diplotypes.tsv` |
+   | What was filled in, read as homozygous or left out? | `run.json` and the screen summary |
+
+5. **Population statistics** (Hardy–Weinberg, linkage disequilibrium, with false-discovery-rate q-values): `hlahaplotools stats INPUT --loci … -o results/stats`. For unrelated people use `hlahaplotools estimate` instead of `families`.
+
+Two cases need a person to look: two siblings without typed parents who share one haplotype are left unphased (both inheritance patterns fit), and recombination is reported but not modelled, so a parent rebuilt in a family flagged for recombination should be checked by hand.
+
+## Validation and benchmarking
+
+All scripts are in [scripts/](scripts), run from the project root with `uv run python`, and are described in [Reproducing the analyses](docs/reproducing-the-analyses.md).
+
+- **Against the other tools**: `benchmark.py run` gives HLAhaploTools, Hapl-o-Mat and PyPop identical input (simulated populations and/or `--real COHORT.dat`) and scores fit, frequencies, time and memory; `bench_haplostats.py` adds haplo.stats on the same cases.
+- **Family phasing against known pedigrees**: `validate_rebuilt_parents.py FAMILY_TABLE` hides the typed parents (both, or one at a time), rebuilds them from the children and scores every rebuilt allele against the parents' own typing; `validate_pedigrees.py` also tests trios and parentage on small, fully checked pedigrees.
+- **EM against haplotypes known from segregation**: `validate_em_segregation.py founders` takes one set of unrelated founders per family; `benchmark.py run --real founders.dat` runs every tool on them; `validate_em_segregation.py score` asks how often each tool's frequencies rank the pedigree-derived pair first.
+
 ## Key strengths
 
 - **Laboratory reports in, ambiguity kept**: MAC, GL strings, GLS, HML and NGSengine, with MAC codes, allele lists and groups weighed by the EM.
