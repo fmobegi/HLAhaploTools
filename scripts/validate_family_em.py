@@ -12,7 +12,7 @@ tried: everyone (children carry their parents' haplotypes, so the EM sees each o
 founders alone (each haplotype seen once or twice, the hardest case). Each locus set is estimated on its own
 loci; the gold standard is the 18-locus phasing projected onto those loci.
 
-    uv run python scripts/validate_family_em.py examples/families/*.csv [--json bench/family_em.json]
+    uv run python scripts/validate_family_em.py examples/families/* [--json bench/family_em.json]
 """
 
 from __future__ import annotations

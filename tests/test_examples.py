@@ -22,7 +22,7 @@ def cleaned(tmp_path_factory):
     from validate_pedigrees import clean, load_rows, write
 
     nom = h.Nomenclature(str(DERIVED))
-    header, rows = load_rows(sorted(EXAMPLES.glob("*.csv")))
+    header, rows = load_rows(sorted([*EXAMPLES.glob("*.csv"), *EXAMPLES.glob("*.dat")]))
     loci, uncovered, _ = clean(header, rows, nom, "2f")
     path = tmp_path_factory.mktemp("examples") / "families.csv"
     write(path, header, rows)
@@ -48,12 +48,12 @@ def test_only_family3_c1_is_flagged(cleaned):
 
 
 def test_c1_defines_haplotypes_a_and_c_even_when_listed_later(nom):
-    """In family_typing_data.csv, Family1 lists C2 first and Family2 lists C3 first.
+    """In typing.dat, Family1 lists C2 first and Family2 lists C3 first.
 
     Haplotype labels must still be anchored on C1: C1 inherits A (father) and C (mother).
     """
     loci = ["A", "C", "B", "DRB1", "DQA1", "DQB1", "DPA1", "DPB1"]
-    data = h.read_family_table(EXAMPLES / "family_typing_data.csv", loci=loci)
+    data = h.read_family_table(EXAMPLES / "typing.dat", loci=loci)
     phases = {p.family: p for p in h.phase_families(data, nom, "2f")}
     expected = {
         "Family1": [("Family1/C1", "A", "C"), ("Family1/C2", "B", "C"), ("Family1/C3", "A", "D")],

@@ -240,7 +240,7 @@ def test_blank_parent_row_is_not_flagged(tmp_path):
     """A parent row left blank (untyped, kept to place the children) is not a pedigree problem."""
     import csv
 
-    rows = list(csv.reader((ROOT / "examples" / "families" / "family_typing_data.csv").open(encoding="utf-8-sig")))
+    rows = list(csv.reader((ROOT / "examples" / "families" / "typing.dat").open(encoding="utf-8-sig")))
     fam = [rows[0]] + [r for r in rows[1:] if r[0] == "Family1"]
     for r in fam[1:]:
         if r[1] == "M":

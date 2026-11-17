@@ -99,7 +99,13 @@ hlahaplotools estimate populationData_b.glc --loci A:g,C:g,B:g,DRB1:g,DQB1:g,DPB
 head -5 results/example/hfs.dat
 ```
 
-Hapl-o-Mat's [examplePopulations](https://github.com/DKMS/Hapl-o-Mat/tree/master/examplePopulations) also has the same kind of data as a MAC table (`populationData_a.dat`) and as GL identifiers (`populationData_c.pull` with `populationData_c.glid`). This repository's [examples/](examples) has a simulated population and family typings.
+Hapl-o-Mat's [examplePopulations](https://github.com/DKMS/Hapl-o-Mat/tree/master/examplePopulations) also has the same kind of data as a MAC table (`populationData_a.dat`) and as GL identifiers (`populationData_c.pull` with `populationData_c.glid`). This repository's [examples/](examples) has a simulated population and family typings:
+
+| File | What it is | Try it |
+| --- | --- | --- |
+| `examples/population/population.dat` | 1,000 simulated people at A, C, B, DRB1 and DQB1, 92 of them untyped at DQB1 | `hlahaplotools estimate examples/population/population.dat --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/population` |
+| `examples/population/truth.tsv` | The haplotypes the simulation was drawn from, for checking an estimate | |
+| `examples/families/typing.dat` | Three families (Family1 to Family3); in Family3 the child C1's typing is a copy of the mother's, which the pedigree audit flags | `hlahaplotools families examples/families/typing.dat --loci A:2f,C:2f,B:2f,DRB1:2f,DQB1:2f -o results/audit` |
 
 Each command writes one folder:
 
@@ -208,7 +214,7 @@ Tests that need the reference data are skipped until `uv run hlahaplotools downl
 | `src/hlahaplotools/reference_data.py` | `download-data`: downloads the pinned reference data and builds the lookup tables |
 | `src/hlahaplotools/derive_tables.py` | Builds the lookup tables from an IMGT/HLA release |
 | `scripts/`                      | Benchmarks, validations and simulation (see [Reproducing the analyses](docs/reproducing-the-analyses.md)) |
-| `examples/`                     | Example data: a simulated population, and family typings from the study described in the manuscript      |
+| `examples/`                     | Example data: a simulated population (`population/`), and family typings (`families/typing.dat`) |
 | `tests/`                        | Test suite                                                                                               |
 
 ## Credits
