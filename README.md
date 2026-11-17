@@ -119,7 +119,7 @@ results/
 │   ├── diplotypes.tsv   most likely haplotype pair per founder
 │   ├── comparison.json  EM on the founders against the family phasing
 │   └── run.json
-├── stats/               stats: hwe.tsv, ld.tsv, ld_alleles.tsv, run.json
+├── stats/               stats: hwe.tsv, ld.tsv, ld_alleles.tsv, ld.svg, run.json
 └── impute/              impute: pairs.tsv, genotypes.tsv, populations.tsv (several populations), run.json
 ```
 

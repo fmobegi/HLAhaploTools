@@ -37,6 +37,7 @@ est.write_frequencies("hfs.dat")
 hwe = h.hardy_weinberg(ds, nom, res)                 # one dict per locus
 ld = h.linkage_disequilibrium(ds, nom, res, pairs=[("A", "B"), ("DRB1", "DQB1")])
 q = h.adjust_fdr([row["p_value"] for row in hwe])    # Benjamini–Hochberg q-values
+open("ld.svg", "w", encoding="utf-8").write(h.ld_svg(ld))  # D′ and Wn heatmaps
 
 # Families
 classical = ["A", "C", "B", "DRB1", "DQA1", "DQB1", "DPA1", "DPB1"]

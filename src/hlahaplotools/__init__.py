@@ -47,6 +47,7 @@ from hlahaplotools.cli import main
 from hlahaplotools.correction import adjust_fdr
 from hlahaplotools.genotypes import read_genotypes, write_genotypes
 from hlahaplotools.multistart import estimate_multistart
+from hlahaplotools.plot import ld_svg
 
 __all__ = [
     "adjust_fdr",
@@ -65,6 +66,7 @@ __all__ = [
     "estimate_multistart",
     "hardy_weinberg",
     "impute",
+    "ld_svg",
     "linkage_disequilibrium",
     "main",
     "phase_families",

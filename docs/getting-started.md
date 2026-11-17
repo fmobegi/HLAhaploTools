@@ -200,6 +200,7 @@ The exit status is 0 on success and 2 if the EM did not converge.
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `hwe.tsv`        | Per locus: people tested, alleles, observed and expected heterozygosity, F, exact-test P, its false-discovery-rate q-value, and people not tested (untyped, half-typed, ambiguous) or read as homozygous from a blank |
 | `ld.tsv`         | Per pair of loci: people used, alleles at each locus, D′, Wn, likelihood-ratio statistic, nominal degrees of freedom, and the permutation P-value and its q-value (with `--ld-permutations`)                       |
+| `ld.svg`         | D′ and Wn per pair of loci as two heatmaps (open in a browser; hover a cell for n, P and q; `*` marks q < 0.05)                                                                                                    |
 | `ld_alleles.tsv` | Per pair of loci and allele pair: haplotype frequency, allele frequencies, D and D′, most frequent first                                                                                                             |
 | `run.json`       | Input, loci and resolutions, reference data versions and parameters                                                                                                                                                   |
 
@@ -265,6 +266,8 @@ Each child is compared with haplotypes phased from the rest of its family, leavi
 **Hardy–Weinberg.** Only people whose genotype at the locus is unambiguous at the target resolution are tested; untyped, half-typed and ambiguous people are counted apart. Expected heterozygosity is Nei's unbiased estimate, 2n/(2n−1)(1 − Σp²), and F = 1 − Ho/He (positive when heterozygotes are too few). The exact test compares the probability of the observed genotype table, given the allele counts, with that of tables formed by pairing the same alleles at random. With large samples even small departures are significant, so read F alongside P.
 
 **Linkage disequilibrium.** For each pair of loci, haplotype frequencies are estimated by EM from everyone typed at either locus. D′ for an allele pair divides D by its largest possible value with the same sign; the overall D′ (Hedrick) is Σ p_a q_b |D′_ab|; and Wn (Cohen) is Cramér's V of the haplotype table. With `--ld-permutations N`, linkage equilibrium is tested by permutation: one locus is shuffled across people and the two-locus likelihood re-estimated. The likelihood-ratio statistic is also written, with its nominal degrees of freedom but no χ² P-value, because the χ² approximation fails with many rare alleles.
+
+**Plot.** `ld.svg` shows D′ and Wn for each pair of loci as two lower-triangle heatmaps on a 0–1 scale, in `--loci` order. From Python, `h.ld_svg(ld, loci)` returns the same SVG as text.
 
 **Multiple testing.** `hwe.tsv` and `ld.tsv` give `q_value`, the Benjamini–Hochberg false-discovery-rate adjusted P across the loci or pairs of the run; report it rather than the raw P.
 

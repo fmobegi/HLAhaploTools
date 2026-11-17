@@ -25,6 +25,7 @@ from hlahaplotools._core import (
 from hlahaplotools.correction import adjust_fdr
 from hlahaplotools.genotypes import read_genotypes, write_genotypes
 from hlahaplotools.multistart import estimate_multistart
+from hlahaplotools.plot import ld_svg
 
 INITS = ["numberOccurrence", "perturbation", "equal", "random"]
 
@@ -516,6 +517,9 @@ def cmd_stats(args) -> int:
 
     Both tables add q_value: the Benjamini–Hochberg false discovery rate adjusted P,
     across the loci (hwe.tsv) or the pairs (ld.tsv) of the run.
+
+    ld.svg plots D' and Wn for every pair as two heatmaps (open it in a browser; hover a
+    cell for n, P and q). An asterisk marks q < 0.05 when --ld-permutations is given.
     """
     say = (lambda *a: None) if args.quiet else print
     nom_dir, mac, manifest = resolve_data_paths(args)
@@ -562,6 +566,8 @@ def cmd_stats(args) -> int:
     pcols = ["allele_a", "allele_b", "haplotype_frequency", "frequency_a", "frequency_b", "d", "d_prime"]
     _tsv(out / "ld_alleles.tsv", ["locus_a", "locus_b", *pcols],
          ([r["locus_a"], r["locus_b"], *[p[c] for c in pcols]] for r in ld for p in r["pairs"]))  # fmt: skip
+    plotted = [l for l in loci if any(l in (r["locus_a"], r["locus_b"]) for r in ld)]
+    (out / "ld.svg").write_text(ld_svg(ld, plotted), encoding="utf-8", newline="\n")
     perm = f"; P from {args.ld_permutations:,} permutations" if args.ld_permutations else ""
     say(f"Linkage disequilibrium (ld.tsv; per allele pair in ld_alleles.tsv{perm}):")
     for r in ld:
@@ -593,7 +599,7 @@ def cmd_stats(args) -> int:
         "seconds": {"hardy_weinberg": round(t1 - t0, 3), "linkage_disequilibrium": round(t2 - t1, 3)},
     }
     (out / "run.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8", newline="\n")
-    say(f"Wrote hwe.tsv, ld.tsv, ld_alleles.tsv and run.json to {out}")
+    say(f"Wrote hwe.tsv, ld.tsv, ld_alleles.tsv, ld.svg and run.json to {out}")
     return 0
 
 

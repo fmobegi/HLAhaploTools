@@ -83,6 +83,9 @@ def test_stats_command_writes_tables(tmp_path):
     assert (out / "ld_alleles.tsv").read_text().count("\n") > 10
     assert hwe[0].split("\t")[7] == "q_value" and ld[0].split("\t")[-1] == "q_value"
     assert json.loads((out / "run.json").read_text())["parameters"]["permutations"] == 500
+    svg = (out / "ld.svg").read_text(encoding="utf-8")
+    assert svg.startswith("<svg") and svg.count("<rect x=") == 2 * 2 + 1  # 2 adjacent pairs x 2 panels + colour bar
+    assert "A~C" in svg and "C~B" in svg and "A~B" not in svg
 
 
 def test_adjust_fdr_matches_benjamini_hochberg():
@@ -91,3 +94,19 @@ def test_adjust_fdr_matches_benjamini_hochberg():
     assert q[2] is None and abs(q[0] - 0.04) < 1e-12 and abs(q[4] - 0.2) < 1e-12
     assert abs(q[1] - 0.16 / 3) < 1e-12 and abs(q[3] - 0.16 / 3) < 1e-12
     assert h.adjust_fdr([0.001] * 55) == [0.001] * 55
+
+
+def test_ld_svg_cells_values_and_stars():
+    ld = [
+        {"locus_a": "A", "locus_b": "B", "n": 10, "alleles_a": 2, "alleles_b": 3, "d_prime": 0.9, "wn": 0.8,
+         "p_value": 0.001, "q_value": 0.002},
+        {"locus_a": "A", "locus_b": "C", "n": 10, "alleles_a": 2, "alleles_b": 2, "d_prime": 0.1, "wn": 0.05,
+         "p_value": 0.5, "q_value": 0.5},
+        {"locus_a": "B", "locus_b": "C", "n": 9, "alleles_a": 3, "alleles_b": 2, "d_prime": 0.4, "wn": 0.3,
+         "p_value": None, "q_value": None},
+    ]  # fmt: skip
+    svg = h.ld_svg(ld, ["A", "B", "C"])
+    assert svg.count("<title>") == 6
+    assert "0.90*" in svg and "0.80*" in svg and "0.10<" in svg and "0.40<" in svg
+    assert "q &lt; 0.05" in svg
+    assert "No permutation test run" in h.ld_svg([dict(ld[0], p_value=None, q_value=None)])
