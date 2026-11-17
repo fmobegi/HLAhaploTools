@@ -5,6 +5,9 @@ repos:
     rev: v3.2.0
     hooks:
     -   id: trailing-whitespace
+        # A trailing tab in a typing file is an empty (untyped) cell: never strip it.
+        exclude: '^examples/|\.(dat|mac|tsv|csv|glc|glsc|pull|glid|hml|xml)$'
     -   id: end-of-file-fixer
+        exclude: '^examples/'
     -   id: check-yaml
     -   id: check-added-large-files
